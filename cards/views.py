@@ -27,7 +27,12 @@ def dictionary_suggestions(request):
     results = DictionaryEntry.objects.filter(
         language_pair="en-ar",
         search_key__startswith=query.casefold(),
-    ).order_by("search_key", "headword").values("headword", "translation")[:10]
+    ).order_by("search_key", "headword").values(
+        "id",
+        "headword",
+        "translation",
+        "vocalized_translation",
+    )[:10]
     return JsonResponse({"results": list(results)})
 
 class FilterView(ListView):
