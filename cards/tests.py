@@ -63,7 +63,7 @@ class DictionarySuggestionTests(TestCase):
 				"answer": "التفاحة",
 				"dictionary_entry_id": DictionaryEntry.objects.get(headword="Apple").id,
 				"box": 1,
-				"category": "F6",
+				"category": "Arabic",
 				"language": "en",
 			},
 		)
@@ -96,6 +96,58 @@ class AccountDeckTests(TestCase):
 			response,
 			f"{reverse('login')}?next={reverse('card-list')}",
 		)
+
+	def test_new_account_only_sees_and_can_select_arabic_category(self):
+		self.client.post(
+			reverse("signup"),
+			{
+				"username": "new-user",
+				"password1": "Correct-Horse-92!",
+				"password2": "Correct-Horse-92!",
+			},
+		)
+		user = get_user_model().objects.get(username="new-user")
+
+		filter_response = self.client.get(
+			reverse("fiter-categories"),
+			{"category": "F6", "language": "de"},
+		)
+		self.assertContains(filter_response, 'value="Arabic"')
+		self.assertNotContains(filter_response, '<option value="F6">')
+		self.assertNotContains(filter_response, '<option value="livres">')
+		self.assertEqual(self.client.session["category"], "Arabic")
+
+		create_response = self.client.get(reverse("card-create"))
+		self.assertContains(create_response, 'value="Arabic"')
+		self.assertNotContains(create_response, '<option value="F6">')
+
+		response = self.client.post(
+			reverse("card-create"),
+			{
+				"question_de": "",
+				"question_en": "Apple",
+				"answer": "التفاحة",
+				"box": 1,
+				"category": "F6",
+				"language": "en",
+			},
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(Card.objects.filter(user=user).exists())
+
+		response = self.client.post(
+			reverse("card-create"),
+			{
+				"question_de": "",
+				"question_en": "Apple",
+				"answer": "التفاحة",
+				"box": 1,
+				"category": "Arabic",
+				"language": "en",
+			},
+		)
+		self.assertRedirects(response, reverse("card-create"))
+		self.assertEqual(Card.objects.get(user=user).category, "Arabic")
 
 	def test_card_uniqueness_is_enforced_for_each_language_per_user(self):
 		user = get_user_model().objects.create_user("owner")
@@ -227,7 +279,7 @@ class AccountDeckTests(TestCase):
 	def test_box_and_repeat_pages_only_show_the_current_users_cards(self):
 		owner = get_user_model().objects.create_user("owner")
 		other_user = get_user_model().objects.create_user("other")
-		card = self.create_card(user=owner, box=1)
+		card = self.create_card(user=owner, box=1, category="Arabic")
 		card.date_moved = timezone.now() - timedelta(days=2)
 		card.save(update_fields=["date_moved"])
 

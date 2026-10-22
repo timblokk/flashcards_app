@@ -5,7 +5,7 @@ __*
 !cards/management/__init__.py
 !cards/management/commands/__init__.py
 !cards/management/commands/*.py
-!cards/migrations/000*.py
+!cards/migrations/[0-9]*.py
 imports/lexique-1.1_F6.xml
 .gitignore
 imports/lexique-2.0_F6.xml

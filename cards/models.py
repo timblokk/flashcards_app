@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 NUM_BOXES = 6
 BOXES = range(1, NUM_BOXES + 1)
 CAT_CHOICES = [
+    ('Arabic', 'Arabic'),
     ('Test_Card','test cards'),
     ('livres', 'Livres/Journaux'),
     ('VHS_B1/B2', 'VHS_B1/B2'),
@@ -25,6 +26,16 @@ LANG_CHOICES = [
     ('pt', 'portogaise'),
     ('es', 'espagnol'),
 ]
+
+
+class AccountCategorySettings(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="category_settings",
+        on_delete=models.CASCADE,
+    )
+    arabic_only = models.BooleanField(default=True)
+
 
 class Card(models.Model):
     user = models.ForeignKey(

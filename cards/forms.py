@@ -6,6 +6,20 @@ from .models import Card, DictionaryEntry
 from .models import LANG_CHOICES
 
 
+def get_category_choices(user):
+    category_settings = getattr(user, "category_settings", None)
+    if category_settings is None or category_settings.arabic_only:
+        return [("Arabic", "Arabic")]
+    return CAT_CHOICES
+
+
+def get_default_category(user):
+    category_settings = getattr(user, "category_settings", None)
+    if category_settings is not None and not category_settings.arabic_only:
+        return "F6"
+    return "Arabic"
+
+
 class CardForm(forms.ModelForm):
     dictionary_entry_id = forms.IntegerField(required=False, widget=forms.HiddenInput)
     question_de = forms.CharField(required=False)
@@ -15,8 +29,11 @@ class CardForm(forms.ModelForm):
         fields = ["question_de", "question_en", "answer", "box", "category", "language"]
         labels = {"answer": "Answer / translation"}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields["category"].choices = get_category_choices(user)
+            self.fields["category"].initial = get_default_category(user)
         self._original_answer = self.instance.answer
         self._original_language = self.instance.language
         self._original_vocalized_answer = self.instance.answer_vocalized
@@ -67,3 +84,9 @@ class CardUpdateForm(forms.Form):
 class CardCategoriesFilterForm(forms.Form):
     category= forms.ChoiceField(choices= CAT_CHOICES)
     language= forms.ChoiceField(choices= LANG_CHOICES)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields["category"].choices = get_category_choices(user)
+            self.fields["category"].initial = get_default_category(user)

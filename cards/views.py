@@ -14,14 +14,13 @@ from django.views.generic import (
 )
 from django.views.generic.edit import FormView
 from itertools import chain
-from .models import Card, DictionaryEntry
+from .models import AccountCategorySettings, Card, DictionaryEntry
 import random
 from django.shortcuts import get_object_or_404, redirect
-from .forms import CardForm
+from .forms import CardForm, get_category_choices, get_default_category
 from .forms import CardCheckForm
 from .forms import CardCategoriesFilterForm
 from django.shortcuts import render
-from .models import CAT_CHOICES
 
 
 def dictionary_suggestions(request):
@@ -49,6 +48,12 @@ class SignUpView(FormView):
     def form_valid(self, form):
         with transaction.atomic():
             user = form.save()
+            AccountCategorySettings.objects.create(
+                user=user,
+                arabic_only=(
+                    user.get_username() != settings.LEGACY_CARD_USERNAME
+                ),
+            )
             if user.get_username() == settings.LEGACY_CARD_USERNAME:
                 Card.objects.filter(user__isnull=True).update(user=user)
         login(self.request, user)
@@ -59,8 +64,7 @@ class FilterView(LoginRequiredMixin, ListView):
     model = Card
     form_class = CardCategoriesFilterForm
     template = "cards/filter_category.html"
-    initial = {'category': 'F6',"language":'de'}
-    
+
     def get_queryset(self):
         return Card.objects.filter(user=self.request.user).order_by(
             "box", "-date_created"
@@ -73,14 +77,18 @@ class FilterView(LoginRequiredMixin, ListView):
 
     def get(self, request, *args, **kwargs):
 
-            form = self.form_class(request.GET or None)
+            initial = {
+                "category": get_default_category(request.user),
+                "language": "de",
+            }
+            form = self.form_class(request.GET or None, user=request.user)
             if form.is_valid():
                 categoryForm = form.cleaned_data["category"]
                 languageForm = form.cleaned_data["language"]
             else:
-                form = self.form_class(initial=self.initial)
-                categoryForm = self.initial["category"]
-                languageForm = self.initial["language"]
+                form = self.form_class(initial=initial, user=request.user)
+                categoryForm = initial["category"]
+                languageForm = initial["language"]
 
             request.session['category']=categoryForm
             request.session['language']=languageForm
@@ -98,15 +106,29 @@ class FilterView(LoginRequiredMixin, ListView):
 class CardListView(LoginRequiredMixin, ListView):
     model = Card
     template = "cards/card_list.html"
+
+    def get_category(self):
+        category = self.request.session.get(
+            "category",
+            get_default_category(self.request.user),
+        )
+        allowed_categories = {
+            value for value, _ in get_category_choices(self.request.user)
+        }
+        if category not in allowed_categories:
+            category = get_default_category(self.request.user)
+            self.request.session["category"] = category
+        return category
+
     def get_queryset(self):
             return Card.objects.filter(
                 user=self.request.user,
-                category=self.request.session.get("category", "F6"),
+                category=self.get_category(),
             ).order_by("box", "-date_created")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["category"] = self.request.session.get("category", "F6")
+        context["category"] = self.get_category()
         context["language"] = self.request.session.get("language", "de")
         return context
 
@@ -115,6 +137,11 @@ class CardCreateView(LoginRequiredMixin, CreateView):
     model = Card
     form_class = CardForm
     success_url = reverse_lazy("card-create")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         form.instance.user = self.request.user
@@ -126,6 +153,11 @@ class CardUpdateView(LoginRequiredMixin, UpdateView):
     form_class = CardForm
     template_name = "cards/card_form.html"
     success_url = reverse_lazy("card-list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
 
     def get_queryset(self):
         return Card.objects.filter(user=self.request.user)
@@ -146,14 +178,14 @@ class BoxView(CardListView):
         return Card.objects.filter(
             user=self.request.user,
             box=self.kwargs["box_num"],
-            category=self.request.session.get("category", "F6"),
+            category=self.get_category(),
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["box_number"] = self.kwargs["box_num"]
         context["object_list"] = self.get_queryset()
-        context["category"] = self.request.session.get("category", "F6")
+        context["category"] = self.get_category()
         context["language"] = self.request.session.get("language", "de")
         return context
 
@@ -166,7 +198,7 @@ class CardRepeatView(CardListView):
             card
             for card in Card.objects.filter(
                 user=self.request.user,
-                category=self.request.session.get("category", "F6"),
+                category=self.get_category(),
             )
             if card.to_repeat
         ]
@@ -176,7 +208,7 @@ class CardRepeatView(CardListView):
         context = super().get_context_data(**kwargs)
         context["object_list"] = self.get_queryset()
         context["card_count"] = len(self.get_queryset())
-        context["category"] = self.request.session.get("category", "F6")
+        context["category"] = self.get_category()
         context["language"] = self.request.session.get("language", "de")
 
         self.queryset = self.object_list
