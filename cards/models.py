@@ -94,26 +94,32 @@ class Card(models.Model):
             models.UniqueConstraint(
                 fields=["user", "answer", "question_de"],
                 name="uniq_card_user_answer_de",
+                condition=~models.Q(question_de=""),
             ),
             models.UniqueConstraint(
                 fields=["user", "answer", "question_en"],
                 name="uniq_card_user_answer_en",
+                condition=~models.Q(question_en=""),
             ),
             models.UniqueConstraint(
                 fields=["user", "answer", "question_pl"],
                 name="uniq_card_user_answer_pl",
+                condition=~models.Q(question_pl=""),
             ),
             models.UniqueConstraint(
                 fields=["user", "answer", "question_it"],
                 name="uniq_card_user_answer_it",
+                condition=~models.Q(question_it=""),
             ),
             models.UniqueConstraint(
                 fields=["user", "answer", "question_pt"],
                 name="uniq_card_user_answer_pt",
+                condition=~models.Q(question_pt=""),
             ),
             models.UniqueConstraint(
                 fields=["user", "answer", "question_es"],
                 name="uniq_card_user_answer_es",
+                condition=~models.Q(question_es=""),
             ),
         ]
 

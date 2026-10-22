@@ -1,9 +1,22 @@
 # cards/forms.py
 from unicodedata import category
 from django import forms
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 from .models import CAT_CHOICES
-from .models import Card, DictionaryEntry
+from .models import BOXES, Card, DictionaryEntry
 from .models import LANG_CHOICES
+from .card_import import parse_card_import
+
+
+QUESTION_FIELDS = {
+    "de": "question_de",
+    "en": "question_en",
+    "pl": "question_pl",
+    "it": "question_it",
+    "pt": "question_pt",
+    "es": "question_es",
+}
 
 
 def get_category_choices(user):
@@ -90,3 +103,80 @@ class CardCategoriesFilterForm(forms.Form):
         if user is not None:
             self.fields["category"].choices = get_category_choices(user)
             self.fields["category"].initial = get_default_category(user)
+
+
+class CardImportForm(forms.Form):
+    file = forms.FileField(label="CSV or Excel file")
+    language = forms.ChoiceField(choices=LANG_CHOICES)
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean(self):
+        cleaned_data = super().clean()
+        uploaded_file = cleaned_data.get("file")
+        language = cleaned_data.get("language")
+        if uploaded_file is None or language not in QUESTION_FIELDS:
+            return cleaned_data
+
+        try:
+            rows = parse_card_import(uploaded_file)
+        except ValidationError as error:
+            self.add_error("file", error)
+            return cleaned_data
+
+        question_field = QUESTION_FIELDS[language]
+        max_question_length = Card._meta.get_field(question_field).max_length
+        max_answer_length = Card._meta.get_field("answer").max_length
+        oversized_rows = [
+            row_number
+            for row_number, question, answer in rows
+            if len(question) > max_question_length or len(answer) > max_answer_length
+        ]
+        if oversized_rows:
+            row_list = ", ".join(str(row) for row in oversized_rows[:20])
+            if len(oversized_rows) > 20:
+                row_list += ", ..."
+            self.add_error(
+                "file",
+                f"Text exceeds the card field length in row(s): {row_list}. "
+                "No cards were imported.",
+            )
+            return cleaned_data
+
+        existing_pairs = set()
+        incoming_pairs = [
+            (answer, question)
+            for _, question, answer in rows
+        ]
+        for offset in range(0, len(incoming_pairs), 100):
+            pair_batch = incoming_pairs[offset:offset + 100]
+            query = Q()
+            for answer, question in pair_batch:
+                query |= Q(answer=answer, **{question_field: question})
+            existing_pairs.update(
+                Card.objects.filter(user=self.user)
+                .filter(query)
+                .values_list("answer", question_field)
+            )
+
+        import_rows = []
+        duplicate_questions = []
+        duplicate_count = 0
+        seen_pairs = set()
+        for row_number, question, answer in rows:
+            pair = (answer, question)
+            if pair in seen_pairs or pair in existing_pairs:
+                duplicate_count += 1
+                if question not in duplicate_questions:
+                    duplicate_questions.append(question)
+                continue
+            seen_pairs.add(pair)
+            import_rows.append((row_number, question, answer))
+
+        cleaned_data["rows"] = import_rows
+        cleaned_data["duplicate_count"] = duplicate_count
+        cleaned_data["duplicate_questions"] = duplicate_questions
+        cleaned_data["question_field"] = question_field
+        return cleaned_data

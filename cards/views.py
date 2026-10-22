@@ -3,7 +3,8 @@ from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.contrib import messages
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -14,10 +15,15 @@ from django.views.generic import (
 )
 from django.views.generic.edit import FormView
 from itertools import chain
-from .models import AccountCategorySettings, Card, DictionaryEntry
+from .models import AccountCategorySettings, BOXES, Card, DictionaryEntry
 import random
 from django.shortcuts import get_object_or_404, redirect
-from .forms import CardForm, get_category_choices, get_default_category
+from .forms import (
+    CardForm,
+    CardImportForm,
+    get_category_choices,
+    get_default_category,
+)
 from .forms import CardCheckForm
 from .forms import CardCategoriesFilterForm
 from django.shortcuts import render
@@ -145,6 +151,93 @@ class CardCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.user = self.request.user
+        return super().form_valid(form)
+
+
+class CardImportView(LoginRequiredMixin, FormView):
+    template_name = "cards/card_import.html"
+    form_class = CardImportForm
+    success_url = reverse_lazy("card-list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        question_field = form.cleaned_data["question_field"]
+        answers = list({
+            answer for _, _, answer in form.cleaned_data["rows"]
+        })
+        vocalized_answers = {}
+        for offset in range(0, len(answers), 500):
+            answer_batch = answers[offset:offset + 500]
+            entries = DictionaryEntry.objects.filter(
+                language_pair="en-ar",
+                translation__in=answer_batch,
+            ).exclude(
+                vocalized_translation="",
+            ).order_by("pk").values_list(
+                "translation",
+                "vocalized_translation",
+            )
+            for translation, vocalized_translation in entries:
+                vocalized_answers.setdefault(translation, vocalized_translation)
+
+        cards = []
+        for row_number, question, answer in form.cleaned_data["rows"]:
+            question_values = {
+                field: ""
+                for field in (
+                    "question_de",
+                    "question_en",
+                    "question_pl",
+                    "question_it",
+                    "question_pt",
+                    "question_es",
+                )
+            }
+            question_values[question_field] = question
+            cards.append(Card(
+                user=self.request.user,
+                answer=answer,
+                box=BOXES[0],
+                category="Arabic",
+                language=form.cleaned_data["language"],
+                answer_vocalized=vocalized_answers.get(answer, ""),
+                **question_values,
+            ))
+
+        if cards:
+            try:
+                with transaction.atomic():
+                    Card.objects.bulk_create(cards, batch_size=500)
+            except IntegrityError:
+                form.add_error(
+                    "file",
+                    "A card conflicts with an existing card. No cards were imported; "
+                    "check for duplicate question and answer pairs and try again.",
+                )
+                return self.form_invalid(form)
+
+        self.request.session["category"] = "Arabic"
+        self.request.session["language"] = form.cleaned_data["language"]
+        duplicate_questions = form.cleaned_data["duplicate_questions"]
+        if duplicate_questions:
+            duplicate_list = ", ".join(duplicate_questions)
+            imported_label = "card" if len(cards) == 1 else "cards"
+            duplicate_label = (
+                "duplicate card" if form.cleaned_data["duplicate_count"] == 1
+                else "duplicate cards"
+            )
+            messages.warning(
+                self.request,
+                f"Imported {len(cards)} {imported_label}. Skipped "
+                f"{form.cleaned_data['duplicate_count']} "
+                f"{duplicate_label}: {duplicate_list}.",
+            )
+        else:
+            messages.success(self.request, f"Imported {len(cards)} cards.")
         return super().form_valid(form)
 
 

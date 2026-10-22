@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from datetime import timedelta
 from io import StringIO
 from tempfile import TemporaryDirectory
@@ -6,6 +7,7 @@ from tempfile import TemporaryDirectory
 from django.core.management import call_command
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -322,6 +324,144 @@ class AccountDeckTests(TestCase):
 		self.client.get(reverse("fiter-categories"))
 		self.assertContains(self.client.get(reverse("box", args=[1])), "legacy-secret-answer")
 		self.assertContains(self.client.get(reverse("todo-list")), "legacy-secret-answer")
+
+
+class CardImportTests(TestCase):
+	def setUp(self):
+		self.user = get_user_model().objects.create_user("importer")
+		self.client.force_login(self.user)
+
+	def upload(self, filename, content, language="en"):
+		return self.client.post(
+			reverse("card-import"),
+			{
+				"file": SimpleUploadedFile(filename, content),
+				"language": language,
+			},
+		)
+
+	def test_csv_upload_creates_owned_arabic_cards_in_selected_language(self):
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="hello",
+			translation="مرحبا",
+			vocalized_translation="مَرْحَبًا",
+		)
+		response = self.upload(
+			"cards.csv",
+			b"question,answer\nhello,\xd9\x85\xd8\xb1\xd8\xad\xd8\xa8\xd8\xa7\nbye,goodbye\n",
+			language="en",
+		)
+
+		self.assertRedirects(response, reverse("card-list"))
+		self.assertEqual(list(response.wsgi_request._messages)[0].message, "Imported 2 cards.")
+		cards = list(Card.objects.filter(user=self.user).order_by("id"))
+		self.assertEqual(len(cards), 2)
+		self.assertEqual(cards[0].question_en, "hello")
+		self.assertEqual(cards[0].answer, "مرحبا")
+		self.assertEqual(cards[0].answer_vocalized, "مَرْحَبًا")
+		self.assertEqual(cards[0].category, "Arabic")
+		self.assertEqual(cards[0].language, "en")
+		self.assertEqual(cards[0].box, 1)
+		self.assertEqual(cards[0].question_de, "")
+		self.assertEqual(cards[1].answer_vocalized, "")
+		other_user = get_user_model().objects.create_user("other-deck")
+		self.assertEqual(Card.objects.filter(user=other_user).count(), 0)
+
+	def test_xlsx_upload_creates_cards_in_selected_language(self):
+		from openpyxl import Workbook
+
+		workbook = Workbook()
+		worksheet = workbook.active
+		worksheet.append(["question", "answer"])
+		worksheet.append(["Haus", "house"])
+		content = BytesIO()
+		workbook.save(content)
+
+		response = self.upload("cards.xlsx", content.getvalue(), language="de")
+
+		self.assertRedirects(response, reverse("card-list"))
+		card = Card.objects.get(user=self.user)
+		self.assertEqual(card.question_de, "Haus")
+		self.assertEqual(card.answer, "house")
+		self.assertEqual(card.language, "de")
+
+	def test_duplicate_rows_are_skipped_and_reported_after_import(self):
+		response = self.upload(
+			"cards.csv",
+			b"question,answer\nhello,world\nhello,world\nbye,goodbye\n",
+		)
+
+		self.assertRedirects(response, reverse("card-list"))
+		self.assertEqual(Card.objects.filter(user=self.user).count(), 2)
+		message = list(response.wsgi_request._messages)[0]
+		self.assertEqual(
+			message.message,
+			"Imported 2 cards. Skipped 1 duplicate card: hello.",
+		)
+		self.assertTrue(message.tags.startswith("warning"))
+
+	def test_invalid_csv_imports_nothing(self):
+		response = self.upload("bad.csv", b"front,back\nhello,world\n")
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "exactly two columns")
+		self.assertEqual(Card.objects.filter(user=self.user).count(), 0)
+
+		response = self.upload(
+			"invalid-row.csv",
+			b"question,answer\nvalid question,valid answer\n,missing question\n",
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "Row 3")
+		self.assertEqual(Card.objects.filter(user=self.user).count(), 0)
+
+	def test_upload_skips_existing_duplicate_but_imports_other_rows(self):
+		Card.objects.create(
+			user=self.user,
+			answer="world",
+			question_en="hello",
+			question_es="",
+			question_de="",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			category="Arabic",
+			language="en",
+		)
+		other_user = get_user_model().objects.create_user("other-importer")
+		Card.objects.create(
+			user=other_user,
+			answer="world",
+			question_en="other question",
+			question_es="",
+			question_de="",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			category="Arabic",
+			language="en",
+		)
+
+		response = self.upload(
+			"cards.csv",
+			b"question,answer\nhello,world\nnew question,new answer\n",
+		)
+
+		self.assertRedirects(response, reverse("card-list"))
+		self.assertEqual(Card.objects.filter(user=self.user).count(), 2)
+		self.assertEqual(Card.objects.filter(user=other_user).count(), 1)
+		message = list(response.wsgi_request._messages)[0]
+		self.assertEqual(
+			message.message,
+			"Imported 1 card. Skipped 1 duplicate card: hello.",
+		)
+
+	def test_upload_requires_login(self):
+		self.client.logout()
+		response = self.upload("cards.csv", b"question,answer\nhello,world\n")
+
+		self.assertEqual(response.status_code, 302)
+		self.assertIn(reverse("login"), response.url)
 
 
 class ArabicVocalizationTests(TestCase):
