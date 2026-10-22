@@ -3,6 +3,11 @@ from . import views
 
 urlpatterns = [
     path(
+        "dictionary/suggest/",
+        views.dictionary_suggestions,
+        name="dictionary-suggest",
+    ),
+    path(
         "",
         views.FilterView.as_view(),
         name="fiter-categories"

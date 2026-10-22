@@ -1,5 +1,6 @@
 from unicodedata import category
 from django.shortcuts import render
+from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import (
     ListView,
@@ -8,13 +9,26 @@ from django.views.generic import (
     DeleteView,
 )
 from itertools import chain
-from .models import Card
+from .models import Card, DictionaryEntry
 import random
 from django.shortcuts import get_object_or_404, redirect
+from .forms import CardForm
 from .forms import CardCheckForm
 from .forms import CardCategoriesFilterForm
 from django.shortcuts import render
 from .models import CAT_CHOICES
+
+
+def dictionary_suggestions(request):
+    query = request.GET.get("q", "").strip()
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+
+    results = DictionaryEntry.objects.filter(
+        language_pair="en-ar",
+        search_key__startswith=query.casefold(),
+    ).order_by("search_key", "headword").values("headword", "translation")[:10]
+    return JsonResponse({"results": list(results)})
 
 class FilterView(ListView):
     model = Card
@@ -68,7 +82,7 @@ class CardListView(ListView):
 
 class CardCreateView(CreateView):
     model = Card
-    fields = ["question_de", "question_en", "answer", "box", "category"]
+    form_class = CardForm
     success_url = reverse_lazy("card-create")
 
 class CardUpdateView(CardCreateView, UpdateView):

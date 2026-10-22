@@ -76,3 +76,23 @@ class Card(models.Model):
         unique_together = ('answer', 'question_it',)
         unique_together = ('answer', 'question_pt',)
         unique_together = ('answer', 'question_es',)
+
+
+class DictionaryEntry(models.Model):
+    language_pair = models.CharField(max_length=16, default="en-ar")
+    headword = models.CharField(max_length=255)
+    search_key = models.CharField(max_length=255, blank=True, default="", db_collation="nocase")
+    translation = models.TextField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["language_pair", "search_key"], name="dict_pair_search_idx"),
+        ]
+
+    def __str__(self):
+        return self.headword
+
+    def save(self, *args, **kwargs):
+        if not self.search_key:
+            self.search_key = self.headword.casefold()
+        super().save(*args, **kwargs)

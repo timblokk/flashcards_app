@@ -1,11 +1,12 @@
 {% extends "cards/base_cards.html" %}
+{% load static %}
 {% block content %}
    {% if card %}
        <h2>✏️ Edit Card</h2>
    {% else %}
        <h2>🪄 Create New Card</h2>
    {% endif %}
-    <form method="post">
+    <form method="post" id="card-form" data-dictionary-url="{% url 'dictionary-suggest' %}">
         {% csrf_token %}
         {{ form.as_p }}
         <input type="submit" value="Save Card">
@@ -13,4 +14,5 @@
     <a href="{% url 'card-list' %}">
         ❌ Cancel
     </a>
+    <script src="{% static 'cards/js/dictionary_autocomplete.js' %}" defer></script>
 {% endblock %}
