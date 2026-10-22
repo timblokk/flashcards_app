@@ -29,27 +29,35 @@ def _validated_rows(rows):
         str(value).strip().casefold() if value is not None else ""
         for value in header
     ]
-    if normalized_header != ["question", "answer"]:
+    if normalized_header not in (
+        ["question", "answer"],
+        ["question", "answer", "language"],
+    ):
         raise ValidationError(
-            "The first row must contain exactly two columns: question, answer."
+            "The first row must contain question, answer, and optionally language."
         )
+    has_language = len(normalized_header) == 3
 
     parsed_rows = []
     for row_number, row in enumerate(rows, start=2):
         if all(value is None or str(value).strip() == "" for value in row):
             continue
-        if len(row) != 2:
+        expected_columns = 3 if has_language else 2
+        if len(row) != expected_columns:
             raise ValidationError(
-                f"Row {row_number}: expected exactly two columns."
+                f"Row {row_number}: expected exactly {expected_columns} columns."
             )
 
         question = _text_cell(row[0], row_number, "question")
         answer = _text_cell(row[1], row_number, "answer")
+        language = _text_cell(row[2], row_number, "language") if has_language else None
         if not question or not answer:
             raise ValidationError(
                 f"Row {row_number}: question and answer must both be non-empty."
             )
-        parsed_rows.append((row_number, question, answer))
+        if has_language and not language:
+            raise ValidationError(f"Row {row_number}: language must be non-empty.")
+        parsed_rows.append((row_number, question, answer, language))
         if len(parsed_rows) > MAX_IMPORT_ROWS:
             raise ValidationError(
                 f"Files may contain at most {MAX_IMPORT_ROWS} non-empty data rows."

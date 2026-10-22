@@ -386,6 +386,107 @@ class CardImportTests(TestCase):
 		self.assertEqual(card.answer, "house")
 		self.assertEqual(card.language, "de")
 
+	def test_exported_xlsx_round_trips_mixed_languages_to_another_user(self):
+		Card.objects.create(
+			user=self.user,
+			answer="مرحبا",
+			question_en="hello",
+			question_es="",
+			question_de="",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			category="Arabic",
+			language="en",
+		)
+		Card.objects.create(
+			user=self.user,
+			answer="Haus",
+			question_en="",
+			question_es="",
+			question_de="house",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			category="Arabic",
+			language="de",
+		)
+		other_user = get_user_model().objects.create_user("export-recipient")
+		Card.objects.create(
+			user=other_user,
+			answer="private",
+			question_en="private question",
+			question_es="",
+			question_de="",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			category="Arabic",
+			language="en",
+		)
+
+		export_response = self.client.get(reverse("card-export"))
+
+		self.assertEqual(export_response.status_code, 200)
+		self.assertEqual(
+			export_response["Content-Disposition"],
+			'attachment; filename="flashcards.xlsx"',
+		)
+		self.assertEqual(
+			export_response["Content-Type"],
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		)
+		from openpyxl import load_workbook
+		exported_workbook = load_workbook(
+			BytesIO(export_response.content),
+			read_only=True,
+			data_only=True,
+		)
+		exported_rows = list(
+			exported_workbook.active.iter_rows(values_only=True)
+		)
+		exported_workbook.close()
+		self.assertEqual(
+			exported_rows,
+			[
+				("question", "answer", "language"),
+				("hello", "مرحبا", "en"),
+				("house", "Haus", "de"),
+			],
+		)
+		self.assertNotIn(
+			("private question", "private", "en"),
+			exported_rows,
+		)
+
+		recipient_client = self.client_class()
+		recipient_client.force_login(other_user)
+		import_response = recipient_client.post(
+			reverse("card-import"),
+			{
+				"file": SimpleUploadedFile(
+					"flashcards.xlsx",
+					export_response.content,
+					content_type=(
+						"application/vnd.openxmlformats-officedocument."
+						"spreadsheetml.sheet"
+					),
+				),
+			},
+		)
+
+		self.assertRedirects(import_response, reverse("card-list"))
+		imported_cards = Card.objects.filter(user=other_user).order_by("id")
+		self.assertEqual(imported_cards.count(), 3)
+		self.assertEqual(
+			list(imported_cards.values_list("question_en", "question_de", "language")),
+			[
+				("private question", "", "en"),
+				("hello", "", "en"),
+				("", "house", "de"),
+			],
+		)
+
 	def test_create_and_import_pages_show_current_category_box_counts(self):
 		Card.objects.create(
 			user=self.user,
@@ -426,7 +527,10 @@ class CardImportTests(TestCase):
 	def test_invalid_csv_imports_nothing(self):
 		response = self.upload("bad.csv", b"front,back\nhello,world\n")
 		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, "exactly two columns")
+		self.assertContains(
+			response,
+			"question, answer, and optionally language",
+		)
 		self.assertEqual(Card.objects.filter(user=self.user).count(), 0)
 
 		response = self.upload(

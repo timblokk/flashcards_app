@@ -107,7 +107,12 @@ class CardCategoriesFilterForm(forms.Form):
 
 class CardImportForm(forms.Form):
     file = forms.FileField(label="CSV or Excel file")
-    language = forms.ChoiceField(choices=LANG_CHOICES)
+    language = forms.ChoiceField(
+        choices=LANG_CHOICES,
+        required=False,
+        label="Question language (for two-column files)",
+        help_text="Three-column export files include a language per card.",
+    )
 
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
@@ -117,7 +122,7 @@ class CardImportForm(forms.Form):
         cleaned_data = super().clean()
         uploaded_file = cleaned_data.get("file")
         language = cleaned_data.get("language")
-        if uploaded_file is None or language not in QUESTION_FIELDS:
+        if uploaded_file is None:
             return cleaned_data
 
         try:
@@ -126,13 +131,40 @@ class CardImportForm(forms.Form):
             self.add_error("file", error)
             return cleaned_data
 
-        question_field = QUESTION_FIELDS[language]
-        max_question_length = Card._meta.get_field(question_field).max_length
+        allowed_languages = {value for value, _ in LANG_CHOICES}
+        rows_with_language = []
+        invalid_language_rows = []
+        for row_number, question, answer, file_language in rows:
+            row_language = file_language or language
+            if row_language not in allowed_languages:
+                invalid_language_rows.append(row_number)
+                continue
+            rows_with_language.append((
+                row_number,
+                question,
+                answer,
+                row_language,
+                QUESTION_FIELDS[row_language],
+            ))
+        if invalid_language_rows:
+            row_list = ", ".join(str(row) for row in invalid_language_rows[:20])
+            if len(invalid_language_rows) > 20:
+                row_list += ", ..."
+            self.add_error(
+                "file",
+                f"Choose a question language for two-column files or provide a "
+                f"valid language in row(s): {row_list}.",
+            )
+            return cleaned_data
+
         max_answer_length = Card._meta.get_field("answer").max_length
         oversized_rows = [
             row_number
-            for row_number, question, answer in rows
-            if len(question) > max_question_length or len(answer) > max_answer_length
+            for row_number, question, answer, _, question_field in rows_with_language
+            if (
+                len(question) > Card._meta.get_field(question_field).max_length
+                or len(answer) > max_answer_length
+            )
         ]
         if oversized_rows:
             row_list = ", ".join(str(row) for row in oversized_rows[:20])
@@ -146,37 +178,45 @@ class CardImportForm(forms.Form):
             return cleaned_data
 
         existing_pairs = set()
-        incoming_pairs = [
-            (answer, question)
-            for _, question, answer in rows
-        ]
-        for offset in range(0, len(incoming_pairs), 100):
-            pair_batch = incoming_pairs[offset:offset + 100]
-            query = Q()
-            for answer, question in pair_batch:
-                query |= Q(answer=answer, **{question_field: question})
-            existing_pairs.update(
-                Card.objects.filter(user=self.user)
-                .filter(query)
-                .values_list("answer", question_field)
-            )
+        for language_code, question_field in QUESTION_FIELDS.items():
+            language_pairs = [
+                (answer, question)
+                for _, question, answer, row_language, _ in rows_with_language
+                if row_language == language_code
+            ]
+            for offset in range(0, len(language_pairs), 100):
+                pair_batch = language_pairs[offset:offset + 100]
+                query = Q()
+                for answer, question in pair_batch:
+                    query |= Q(answer=answer, **{question_field: question})
+                existing_pairs.update(
+                    (language_code, answer, question)
+                    for answer, question in Card.objects.filter(user=self.user)
+                    .filter(query)
+                    .values_list("answer", question_field)
+                )
 
         import_rows = []
         duplicate_questions = []
         duplicate_count = 0
         seen_pairs = set()
-        for row_number, question, answer in rows:
-            pair = (answer, question)
+        for row_number, question, answer, row_language, question_field in rows_with_language:
+            pair = (row_language, answer, question)
             if pair in seen_pairs or pair in existing_pairs:
                 duplicate_count += 1
                 if question not in duplicate_questions:
                     duplicate_questions.append(question)
                 continue
             seen_pairs.add(pair)
-            import_rows.append((row_number, question, answer))
+            import_rows.append((
+                row_number,
+                question,
+                answer,
+                row_language,
+                question_field,
+            ))
 
         cleaned_data["rows"] = import_rows
         cleaned_data["duplicate_count"] = duplicate_count
         cleaned_data["duplicate_questions"] = duplicate_questions
-        cleaned_data["question_field"] = question_field
         return cleaned_data

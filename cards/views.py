@@ -12,15 +12,19 @@ from django.views.generic import (
     CreateView,
     UpdateView,
     DeleteView,
+    View,
 )
 from django.views.generic.edit import FormView
 from itertools import chain
 from .models import AccountCategorySettings, BOXES, Card, DictionaryEntry
 import random
+from io import BytesIO
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from .forms import (
     CardForm,
     CardImportForm,
+    QUESTION_FIELDS,
     get_category_choices,
     get_default_category,
 )
@@ -167,9 +171,8 @@ class CardImportView(CardNavigationContextMixin, LoginRequiredMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
-        question_field = form.cleaned_data["question_field"]
         answers = list({
-            answer for _, _, answer in form.cleaned_data["rows"]
+            answer for _, _, answer, _, _ in form.cleaned_data["rows"]
         })
         vocalized_answers = {}
         for offset in range(0, len(answers), 500):
@@ -187,7 +190,8 @@ class CardImportView(CardNavigationContextMixin, LoginRequiredMixin, FormView):
                 vocalized_answers.setdefault(translation, vocalized_translation)
 
         cards = []
-        for row_number, question, answer in form.cleaned_data["rows"]:
+        imported_languages = []
+        for row_number, question, answer, language, question_field in form.cleaned_data["rows"]:
             question_values = {
                 field: ""
                 for field in (
@@ -205,10 +209,11 @@ class CardImportView(CardNavigationContextMixin, LoginRequiredMixin, FormView):
                 answer=answer,
                 box=BOXES[0],
                 category="Arabic",
-                language=form.cleaned_data["language"],
+                language=language,
                 answer_vocalized=vocalized_answers.get(answer, ""),
                 **question_values,
             ))
+            imported_languages.append(language)
 
         if cards:
             try:
@@ -223,7 +228,8 @@ class CardImportView(CardNavigationContextMixin, LoginRequiredMixin, FormView):
                 return self.form_invalid(form)
 
         self.request.session["category"] = "Arabic"
-        self.request.session["language"] = form.cleaned_data["language"]
+        if imported_languages:
+            self.request.session["language"] = imported_languages[-1]
         duplicate_questions = form.cleaned_data["duplicate_questions"]
         if duplicate_questions:
             duplicate_list = ", ".join(duplicate_questions)
@@ -241,6 +247,42 @@ class CardImportView(CardNavigationContextMixin, LoginRequiredMixin, FormView):
         else:
             messages.success(self.request, f"Imported {len(cards)} cards.")
         return super().form_valid(form)
+
+
+class CardExportView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        from openpyxl import Workbook
+
+        workbook = Workbook(write_only=True)
+        worksheet = workbook.create_sheet(title="Flashcards")
+        worksheet.append(["question", "answer", "language"])
+
+        cards = Card.objects.filter(user=request.user).order_by("pk").iterator()
+        for card in cards:
+            preferred_language = card.language
+            preferred_field = QUESTION_FIELDS.get(preferred_language)
+            question = getattr(card, preferred_field) if preferred_field else ""
+            language = preferred_language
+            if not question:
+                for language_code, question_field in QUESTION_FIELDS.items():
+                    question = getattr(card, question_field)
+                    if question:
+                        language = language_code
+                        break
+            if question:
+                worksheet.append([question, card.answer, language])
+
+        output = BytesIO()
+        workbook.save(output)
+        response = HttpResponse(
+            output.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+        response["Content-Disposition"] = 'attachment; filename="flashcards.xlsx"'
+        return response
 
 
 class CardUpdateView(CardNavigationContextMixin, LoginRequiredMixin, UpdateView):
