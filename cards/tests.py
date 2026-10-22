@@ -386,6 +386,28 @@ class CardImportTests(TestCase):
 		self.assertEqual(card.answer, "house")
 		self.assertEqual(card.language, "de")
 
+	def test_create_and_import_pages_show_current_category_box_counts(self):
+		Card.objects.create(
+			user=self.user,
+			answer="مرحبا",
+			question_en="hello",
+			question_es="",
+			question_de="",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			box=1,
+			category="Arabic",
+			language="en",
+		)
+
+		for url in (reverse("card-create"), reverse("card-import")):
+			with self.subTest(url=url):
+				response = self.client.get(url)
+				self.assertContains(response, "Arabic")
+				self.assertContains(response, "<mark>1</mark>")
+				self.assertContains(response, "<mark>0</mark>")
+
 	def test_duplicate_rows_are_skipped_and_reported_after_import(self):
 		response = self.upload(
 			"cards.csv",

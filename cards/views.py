@@ -109,10 +109,7 @@ class FilterView(LoginRequiredMixin, ListView):
             context["language"] = languageForm
             return render(request, self.template, context)
 
-class CardListView(LoginRequiredMixin, ListView):
-    model = Card
-    template = "cards/card_list.html"
-
+class CardNavigationContextMixin:
     def get_category(self):
         category = self.request.session.get(
             "category",
@@ -126,12 +123,6 @@ class CardListView(LoginRequiredMixin, ListView):
             self.request.session["category"] = category
         return category
 
-    def get_queryset(self):
-            return Card.objects.filter(
-                user=self.request.user,
-                category=self.get_category(),
-            ).order_by("box", "-date_created")
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["category"] = self.get_category()
@@ -139,7 +130,18 @@ class CardListView(LoginRequiredMixin, ListView):
         return context
 
 
-class CardCreateView(LoginRequiredMixin, CreateView):
+class CardListView(CardNavigationContextMixin, LoginRequiredMixin, ListView):
+    model = Card
+    template = "cards/card_list.html"
+
+    def get_queryset(self):
+            return Card.objects.filter(
+                user=self.request.user,
+                category=self.get_category(),
+            ).order_by("box", "-date_created")
+
+
+class CardCreateView(CardNavigationContextMixin, LoginRequiredMixin, CreateView):
     model = Card
     form_class = CardForm
     success_url = reverse_lazy("card-create")
@@ -154,7 +156,7 @@ class CardCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class CardImportView(LoginRequiredMixin, FormView):
+class CardImportView(CardNavigationContextMixin, LoginRequiredMixin, FormView):
     template_name = "cards/card_import.html"
     form_class = CardImportForm
     success_url = reverse_lazy("card-list")
@@ -241,7 +243,7 @@ class CardImportView(LoginRequiredMixin, FormView):
         return super().form_valid(form)
 
 
-class CardUpdateView(LoginRequiredMixin, UpdateView):
+class CardUpdateView(CardNavigationContextMixin, LoginRequiredMixin, UpdateView):
     model = Card
     form_class = CardForm
     template_name = "cards/card_form.html"
