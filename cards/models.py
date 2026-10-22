@@ -1,5 +1,6 @@
 from os import times
 from time import time
+from django.conf import settings
 from django.db import models
 from itertools import chain
 import datetime
@@ -8,6 +9,7 @@ from django.core.exceptions import ValidationError
 NUM_BOXES = 6
 BOXES = range(1, NUM_BOXES + 1)
 CAT_CHOICES = [
+    ('Arabic', 'Arabic'),
     ('Test_Card','test cards'),
     ('livres', 'Livres/Journaux'),
     ('VHS_B1/B2', 'VHS_B1/B2'),
@@ -25,7 +27,24 @@ LANG_CHOICES = [
     ('es', 'espagnol'),
 ]
 
+
+class AccountCategorySettings(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="category_settings",
+        on_delete=models.CASCADE,
+    )
+    arabic_only = models.BooleanField(default=True)
+
+
 class Card(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="cards",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     answer =  models.CharField(max_length = 300)
     answer_vocalized = models.TextField(blank=True)
     question_en = models.CharField(max_length = 100)
@@ -71,12 +90,32 @@ class Card(models.Model):
         return to_repeat
 
     class Meta:
-        unique_together = ('answer', 'question_de',) # should it be unique across categories?
-        unique_together = ('answer', 'question_en',)
-        unique_together = ('answer', 'question_pl',)
-        unique_together = ('answer', 'question_it',)
-        unique_together = ('answer', 'question_pt',)
-        unique_together = ('answer', 'question_es',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_de"],
+                name="uniq_card_user_answer_de",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_en"],
+                name="uniq_card_user_answer_en",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_pl"],
+                name="uniq_card_user_answer_pl",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_it"],
+                name="uniq_card_user_answer_it",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_pt"],
+                name="uniq_card_user_answer_pt",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_es"],
+                name="uniq_card_user_answer_es",
+            ),
+        ]
 
 
 class DictionaryEntry(models.Model):

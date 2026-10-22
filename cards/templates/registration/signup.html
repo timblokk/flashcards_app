@@ -1,0 +1,32 @@
+{% extends "cards/base_cards.html" %}
+{% block content %}
+    <h2>Create an account</h2>
+    <section aria-labelledby="password-requirements">
+        <h3 id="password-requirements">Password requirements</h3>
+        {{ form.password1.help_text|safe }}
+    </section>
+    <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <ul class="form-errors" role="alert">
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% for field in form %}
+            <p>
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text and field.name != "password1" %}
+                    <small>{{ field.help_text|safe }}</small>
+                {% endif %}
+                {% for error in field.errors %}
+                    <span class="field-error" role="alert">{{ error }}</span>
+                {% endfor %}
+            </p>
+        {% endfor %}
+        <button type="submit">Create account</button>
+    </form>
+    <p>Already registered? <a href="{% url 'login' %}">Log in</a>.</p>
+{% endblock %}
