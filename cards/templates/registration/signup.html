@@ -1,0 +1,10 @@
+{% extends "cards/base_cards.html" %}
+{% block content %}
+    <h2>Create an account</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Create account</button>
+    </form>
+    <p>Already registered? <a href="{% url 'login' %}">Log in</a>.</p>
+{% endblock %}

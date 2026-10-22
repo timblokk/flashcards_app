@@ -3,6 +3,7 @@ from io import StringIO
 from tempfile import TemporaryDirectory
 
 from django.core.management import call_command
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -50,6 +51,7 @@ class DictionarySuggestionTests(TestCase):
 		self.assertEqual(response.json(), {"results": []})
 
 	def test_create_card_accepts_english_arabic_without_german(self):
+		self.client.force_login(get_user_model().objects.create_user("card-owner"))
 		response = self.client.post(
 			reverse("card-create"),
 			{
@@ -68,6 +70,111 @@ class DictionarySuggestionTests(TestCase):
 		self.assertEqual(card.answer, "التفاحة")
 		self.assertEqual(card.answer_vocalized, "التُّفَّاحَةُ")
 		self.assertEqual(card.language, "en")
+		self.assertEqual(card.user.username, "card-owner")
+
+
+class AccountDeckTests(TestCase):
+	def create_card(self, **kwargs):
+		return Card.objects.create(
+			answer="legacy-secret-answer",
+			question_en="question",
+			question_es="",
+			question_de="",
+			question_it="",
+			question_pt="",
+			question_pl="",
+			**kwargs,
+		)
+
+	def test_card_pages_require_login(self):
+		response = self.client.get(reverse("card-list"))
+
+		self.assertRedirects(
+			response,
+			f"{reverse('login')}?next={reverse('card-list')}",
+		)
+
+	def test_legacy_username_claims_existing_cards_at_signup(self):
+		legacy_card = self.create_card()
+
+		response = self.client.post(
+			reverse("signup"),
+			{
+				"username": "legacyUser",
+				"password1": "Correct-Horse-92!",
+				"password2": "Correct-Horse-92!",
+			},
+		)
+
+		self.assertRedirects(response, reverse("fiter-categories"))
+		user = get_user_model().objects.get(username="legacyUser")
+		self.assertTrue(user.check_password("Correct-Horse-92!"))
+		legacy_card.refresh_from_db()
+		self.assertEqual(legacy_card.user, user)
+		self.assertIn("_auth_user_id", self.client.session)
+
+	def test_other_accounts_start_with_empty_private_decks(self):
+		legacy_card = self.create_card()
+		self.client.post(
+			reverse("signup"),
+			{
+				"username": "legacyUser",
+				"password1": "Correct-Horse-92!",
+				"password2": "Correct-Horse-92!",
+			},
+		)
+		legacy_user = get_user_model().objects.get(username="legacyUser")
+
+		other_client = self.client_class()
+		response = other_client.post(
+			reverse("signup"),
+			{
+				"username": "anotherUser",
+				"password1": "A-Different-Password-75!",
+				"password2": "A-Different-Password-75!",
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		other_user = get_user_model().objects.get(username="anotherUser")
+		self.assertEqual(
+			Card.objects.filter(user=other_user).count(),
+			0,
+		)
+
+		other_client.get(reverse("fiter-categories"))
+		response = other_client.get(reverse("card-list"))
+		self.assertNotContains(response, "legacy-secret-answer")
+		self.assertNotContains(response, "<mark>1</mark>")
+
+		self.client.force_login(legacy_user)
+		response = self.client.get(reverse("card-list"))
+		self.assertContains(response, "legacy-secret-answer")
+		legacy_card.refresh_from_db()
+		self.assertEqual(legacy_card.user, legacy_user)
+
+	def test_account_cannot_edit_or_delete_another_users_card(self):
+		owner = get_user_model().objects.create_user("owner")
+		other_user = get_user_model().objects.create_user("other")
+		card = self.create_card(user=owner)
+		self.client.force_login(other_user)
+
+		self.assertEqual(
+			self.client.get(reverse("card-update", args=[card.pk])).status_code,
+			404,
+		)
+		self.assertEqual(
+			self.client.post(reverse("card-delete", args=[card.pk])).status_code,
+			404,
+		)
+		self.assertEqual(
+			self.client.post(
+				reverse("todo-list"),
+				{"card_id": card.pk, "solved": "on"},
+			).status_code,
+			404,
+		)
+		self.assertTrue(Card.objects.filter(pk=card.pk).exists())
 
 
 class ArabicVocalizationTests(TestCase):

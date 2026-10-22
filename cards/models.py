@@ -1,5 +1,6 @@
 from os import times
 from time import time
+from django.conf import settings
 from django.db import models
 from itertools import chain
 import datetime
@@ -26,6 +27,13 @@ LANG_CHOICES = [
 ]
 
 class Card(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="cards",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     answer =  models.CharField(max_length = 300)
     answer_vocalized = models.TextField(blank=True)
     question_en = models.CharField(max_length = 100)
@@ -71,12 +79,12 @@ class Card(models.Model):
         return to_repeat
 
     class Meta:
-        unique_together = ('answer', 'question_de',) # should it be unique across categories?
-        unique_together = ('answer', 'question_en',)
-        unique_together = ('answer', 'question_pl',)
-        unique_together = ('answer', 'question_it',)
-        unique_together = ('answer', 'question_pt',)
-        unique_together = ('answer', 'question_es',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_es"],
+                name="unique_user_card_answer_es",
+            ),
+        ]
 
 
 class DictionaryEntry(models.Model):

@@ -1,8 +1,17 @@
 {% load cards_tags %}
 <nav>
-    <a href="{% url 'fiter-categories' %}">🗂 Filter Cards </a>
-    <a href="{% url 'card-list' %}">🗂  Cards for {{ category }}</a>
-    {% repeat_box_as_link category %}
-    {% boxes_as_links category %}
-
+    {% if user.is_authenticated %}
+        <a href="{% url 'fiter-categories' %}">🗂 Filter Cards</a>
+        <a href="{% url 'card-list' %}">🗂 Cards for {{ category }}</a>
+        {% repeat_box_as_link category %}
+        {% boxes_as_links category %}
+        <span>{{ user.username }}</span>
+        <form method="post" action="{% url 'logout' %}" style="display: inline">
+            {% csrf_token %}
+            <button type="submit">Log out</button>
+        </form>
+    {% else %}
+        <a href="{% url 'login' %}">Log in</a>
+        <a href="{% url 'signup' %}">Create account</a>
+    {% endif %}
 </nav>

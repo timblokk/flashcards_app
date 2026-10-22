@@ -3,6 +3,11 @@ from . import views
 
 urlpatterns = [
     path(
+        "accounts/signup/",
+        views.SignUpView.as_view(),
+        name="signup",
+    ),
+    path(
         "dictionary/suggest/",
         views.dictionary_suggestions,
         name="dictionary-suggest",
