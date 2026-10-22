@@ -149,6 +149,31 @@ class AccountDeckTests(TestCase):
 		self.assertRedirects(response, reverse("card-create"))
 		self.assertEqual(Card.objects.get(user=user).category, "Arabic")
 
+	def test_signup_shows_password_validation_errors(self):
+		response = self.client.get(reverse("signup"))
+
+		self.assertContains(response, "Password requirements")
+		self.assertContains(response, "at least 8 characters")
+		self.assertContains(response, "commonly used password")
+		self.assertContains(response, "entirely numeric")
+		self.assertContains(response, "too similar to your other personal information")
+
+		response = self.client.post(
+			reverse("signup"),
+			{
+				"username": "new-user",
+				"password1": "short",
+				"password2": "short",
+			},
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "This password is too short")
+		self.assertContains(response, 'role="alert"')
+		self.assertFalse(
+			get_user_model().objects.filter(username="new-user").exists()
+		)
+
 	def test_card_uniqueness_is_enforced_for_each_language_per_user(self):
 		user = get_user_model().objects.create_user("owner")
 		other_user = get_user_model().objects.create_user("other")
