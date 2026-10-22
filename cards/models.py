@@ -81,8 +81,28 @@ class Card(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
+                fields=["user", "answer", "question_de"],
+                name="uniq_card_user_answer_de",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_en"],
+                name="uniq_card_user_answer_en",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_pl"],
+                name="uniq_card_user_answer_pl",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_it"],
+                name="uniq_card_user_answer_it",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "answer", "question_pt"],
+                name="uniq_card_user_answer_pt",
+            ),
+            models.UniqueConstraint(
                 fields=["user", "answer", "question_es"],
-                name="unique_user_card_answer_es",
+                name="uniq_card_user_answer_es",
             ),
         ]
 

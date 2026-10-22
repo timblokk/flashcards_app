@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 
 from django.core.management import call_command
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -95,6 +96,51 @@ class AccountDeckTests(TestCase):
 			response,
 			f"{reverse('login')}?next={reverse('card-list')}",
 		)
+
+	def test_card_uniqueness_is_enforced_for_each_language_per_user(self):
+		user = get_user_model().objects.create_user("owner")
+		other_user = get_user_model().objects.create_user("other")
+		question_fields = [
+			"question_de",
+			"question_en",
+			"question_pl",
+			"question_it",
+			"question_pt",
+			"question_es",
+		]
+
+		for field in question_fields:
+			with self.subTest(language_field=field):
+				question_values = {
+					question_field: f"{field}-{question_field}"
+					for question_field in question_fields
+				}
+				Card.objects.create(
+					user=user,
+					answer="translation",
+					**question_values,
+				)
+
+				duplicate_values = question_values.copy()
+				duplicate_values[field] = question_values[field]
+				duplicate_values.update({
+					question_field: (
+						value if question_field == field else f"other-{value}"
+					)
+					for question_field, value in question_values.items()
+				})
+				with self.assertRaises(IntegrityError), transaction.atomic():
+					Card.objects.create(
+						user=user,
+						answer="translation",
+						**duplicate_values,
+					)
+
+				Card.objects.create(
+					user=other_user,
+					answer="translation",
+					**question_values,
+				)
 
 	def test_legacy_username_claims_existing_cards_at_signup(self):
 		legacy_card = self.create_card()
