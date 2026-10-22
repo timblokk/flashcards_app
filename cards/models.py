@@ -27,6 +27,7 @@ LANG_CHOICES = [
 
 class Card(models.Model):
     answer =  models.CharField(max_length = 300)
+    answer_vocalized = models.TextField(blank=True)
     question_en = models.CharField(max_length = 100)
     question_es = models.CharField(max_length = 100)
     question_de = models.CharField(max_length = 100)
@@ -83,6 +84,7 @@ class DictionaryEntry(models.Model):
     headword = models.CharField(max_length=255)
     search_key = models.CharField(max_length=255, blank=True, default="", db_collation="nocase")
     translation = models.TextField()
+    vocalized_translation = models.TextField(blank=True, default="")
 
     class Meta:
         indexes = [

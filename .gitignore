@@ -4,6 +4,7 @@ __*
 00*
 !cards/management/__init__.py
 !cards/management/commands/__init__.py
+!cards/management/commands/*.py
 !cards/migrations/000*.py
 imports/lexique-1.1_F6.xml
 .gitignore
@@ -8067,3 +8068,5 @@ lib/python3.10/site-packages/tests/test_widget.py
 lib/python3.10/site-packages/tests/urls.py
 lib/python3.10/site-packages/tests/wsgi.py
 freedict-eng-ara-0.6.3.stardict.tar.xz
+cards/migrations/0006_card_answer_vocalized.py
+cards/migrations/0007_dictionaryentry_vocalized_translation.py

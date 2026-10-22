@@ -5,6 +5,7 @@
     const headwordInput = form.querySelector("#id_question_en");
     const translationInput = form.querySelector("#id_answer");
     const languageInput = form.querySelector("#id_language");
+    const dictionaryEntryInput = form.querySelector("#id_dictionary_entry_id");
     if (!headwordInput || !translationInput) return;
 
     const suggestions = document.createElement("div");
@@ -30,6 +31,7 @@
     const chooseSuggestion = (entry) => {
         headwordInput.value = entry.headword;
         translationInput.value = entry.translation;
+        if (dictionaryEntryInput) dictionaryEntryInput.value = entry.id;
         if (languageInput) {
             languageInput.value = "en";
             languageInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -51,7 +53,9 @@
 
         const translation = document.createElement("span");
         translation.className = "dictionary-translation";
-        translation.textContent = entry.translation;
+        translation.textContent = entry.vocalized_translation
+            ? `${entry.translation} (${entry.vocalized_translation})`
+            : entry.translation;
 
         button.append(headword, translation);
         button.addEventListener("click", () => chooseSuggestion(entry));
@@ -60,6 +64,7 @@
 
     headwordInput.addEventListener("input", () => {
         window.clearTimeout(timer);
+        if (dictionaryEntryInput) dictionaryEntryInput.value = "";
         const query = headwordInput.value.trim();
         if (query.length < 2) {
             if (controller) controller.abort();

@@ -20,6 +20,11 @@
     <p> 
       {{ card.answer }}
     </p>
+    {% if card.answer_vocalized %}
+    <p class="vocalized-answer" lang="ar" dir="rtl">
+      {{ card.answer_vocalized }}
+    </p>
+    {% endif %}
    <hr>
    <div style="float:left;">
     <a href="{% url 'card-update' card.id %}" role="button" style="text-align: inline-start">
@@ -37,6 +42,11 @@
             <p>
               {{ card.answer }}
             </p>
+            {% if card.answer_vocalized %}
+            <p class="vocalized-answer" lang="ar" dir="rtl">
+              {{ card.answer_vocalized }}
+            </p>
+            {% endif %}
         </details>
         <hr>
         {% include "cards/card_check_form.html" with solved=True %}
