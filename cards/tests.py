@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from io import StringIO
 from tempfile import TemporaryDirectory
 
@@ -6,6 +7,7 @@ from django.core.management import call_command
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.template.loader import render_to_string
+from django.utils import timezone
 from django.urls import reverse
 
 from cards.forms import CardForm
@@ -175,6 +177,28 @@ class AccountDeckTests(TestCase):
 			404,
 		)
 		self.assertTrue(Card.objects.filter(pk=card.pk).exists())
+
+	def test_box_and_repeat_pages_only_show_the_current_users_cards(self):
+		owner = get_user_model().objects.create_user("owner")
+		other_user = get_user_model().objects.create_user("other")
+		card = self.create_card(user=owner, box=1)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		self.client.force_login(other_user)
+		self.client.get(reverse("fiter-categories"))
+		box_response = self.client.get(reverse("box", args=[1]))
+		repeat_response = self.client.get(reverse("todo-list"))
+
+		self.assertNotContains(box_response, "legacy-secret-answer")
+		self.assertContains(box_response, "<mark>0</mark>")
+		self.assertNotContains(repeat_response, "legacy-secret-answer")
+		self.assertContains(repeat_response, "<mark>0</mark>")
+
+		self.client.force_login(owner)
+		self.client.get(reverse("fiter-categories"))
+		self.assertContains(self.client.get(reverse("box", args=[1])), "legacy-secret-answer")
+		self.assertContains(self.client.get(reverse("todo-list")), "legacy-secret-answer")
 
 
 class ArabicVocalizationTests(TestCase):
