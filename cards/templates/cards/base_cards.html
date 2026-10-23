@@ -1,161 +1,35 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <title>Flashcards</title>
-    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f6fb">
+    <title>{% block title %}Flashcards{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'cards/css/app.css' %}">
 </head>
-<style>
-    /* Custom CSS */
-    :root {
-        --accent: #6e48ad;
-        --accent-bg: white;
-        --bg: #fff;
-        --text: #212121;
-        --text-light: #585858;
-        --border: #d8dae1;
-        --code: #d81b60;
-        --preformatted: #444;
-    }
-    article {
-        background-color: var(--marked);
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        padding: 3em;
-        margin: 1em 0;
-    }
-    h2 {
-        text-align: center;
-    }
-    h2, h4 {
-        margin-top: 0;
-    }
-    hr {
-        background: var(--accent);
-        border-color: var(--accent);
-    }
-    button,
-    a[role="button"] {
-        color: white;
-        text-decoration: none;
-    }
-    input, select, textarea {
-        width: 100%;
-    }
-    .dictionary-suggestions {
-        border: 1px solid var(--border);
-        max-height: 16rem;
-        overflow-y: auto;
-        margin-top: -0.5rem;
-        margin-bottom: 1rem;
-    }
-    button.dictionary-suggestion {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        width: 100%;
-        padding: 0.65rem 0.8rem;
-        border: 0;
-        border-bottom: 1px solid var(--border);
-        border-radius: 0;
-        background: var(--bg);
-        color: var(--text);
-        text-align: left;
-        cursor: pointer;
-    }
-    button.dictionary-suggestion:hover,
-    button.dictionary-suggestion:focus-visible {
-        background: #eef4f2;
-        color: var(--text);
-    }
-    .dictionary-headword {
-        font-weight: 700;
-    }
-    .dictionary-translation {
-        direction: rtl;
-        text-align: right;
-    }
-    .vocalized-answer {
-        direction: rtl;
-        font-size: 1.2rem;
-    }
-    .flip-control {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-        margin: 1rem 0;
-    }
-    .flip-control label {
-        margin: 0;
-    }
-    .flip-control input {
-        appearance: none;
-        width: 3rem;
-        height: 1.6rem;
-        margin: 0;
-        border: 0;
-        border-radius: 1rem;
-        background: #a0a0a0;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
-    }
-    .flip-control input::before {
-        display: block;
-        width: 1.2rem;
-        height: 1.2rem;
-        margin: 0.2rem;
-        border-radius: 50%;
-        background: white;
-        content: "";
-        transition: transform 0.15s ease;
-    }
-    .flip-control input:checked {
-        background: var(--accent);
-    }
-    .flip-control input:checked::before {
-        transform: translateX(1.4rem);
-    }
-    .flip-control input:focus-visible {
-        outline: 2px solid var(--text);
-        outline-offset: 2px;
-    }
-    nav form {
-        display: inline;
-    }
-    nav button {
-        width: auto;
-    }
-    .field-error,
-    .form-errors {
-        color: #b00020;
-    }
-    .field-error {
-        display: block;
-        margin-top: 0.25rem;
-    }
-    .messages {
-        color: #176b32;
-    }
-    .messages .warning {
-        color: #805500;
-    }
-</style>
 <body>
-    <header>
-        <h1>Flashcards App</h1>
-        {% include "cards/navigation.html" %}
+    <header class="site-header">
+        <div class="header-inner">
+            <a class="brand" href="{% if user.is_authenticated %}{% url 'card-list' %}{% else %}{% url 'login' %}{% endif %}">
+                <span class="brand-mark" aria-hidden="true">f</span>
+                <span>flashcards<span class="brand-period">.</span></span>
+            </a>
+            {% include "cards/navigation.html" %}
+        </div>
     </header>
-    <main>
+    <main class="page-shell">
         {% if messages %}
-            <ul class="messages" role="status">
+            <div class="messages" role="status">
                 {% for message in messages %}
-                    <li class="{{ message.tags }}">{{ message }}</li>
+                    <p class="message {{ message.tags }}">{{ message }}</p>
                 {% endfor %}
-            </ul>
+            </div>
         {% endif %}
         {% block content %}
-            <h2>Bienvenue chez le meilleur Flashcards app dans le monde!</h2>
+            <h1>Learn one card at a time.</h1>
         {% endblock content %}
     </main>
+    <footer class="site-footer">A little progress, every day.</footer>
 </body>
 </html>

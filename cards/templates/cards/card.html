@@ -1,12 +1,14 @@
-<article>
+<article class="flashcard{% if check_card %} flashcard-review{% endif %}">
     {% if not check_card %}
+    <div class="card-content">
+    <p class="card-side-label">QUESTION</p>
     <h4>{{ card.question }}</h4>
     {% if card.question_vocalized %}
     <p class="vocalized-answer" lang="ar" dir="rtl">
       {{ card.question_vocalized }}
     </p>
     {% endif %}
-    <p> 
+    <p class="card-answer">
       {{ card.answer }}
     </p>
     {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
@@ -14,19 +16,15 @@
       {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
     </p>
     {% endif %}
-   <hr>
-   <div style="float:left;">
-    <a href="{% url 'card-update' card.id %}" role="button" style="text-align: inline-start">
-      ✏️ Edit Card
-    </a>
-  </div>
-  <div style="float:right;">
-    <a href="{% url 'card-delete' card.id %}" role="button"  style="text-align: inline-end">
-      🗑️ Delete Card
-    </a>  
-  </div>
+    </div>
+   <div class="card-actions">
+    <a class="button button-secondary" href="{% url 'card-update' card.id %}">Edit card</a>
+    <a class="button button-quiet" href="{% url 'card-delete' card.id %}">Delete</a>
+   </div>
    {% else %}
+       <div class="card-content">
        {% if flipped %}
+       <p class="card-side-label">ANSWER</p>
        <h4>{{ card.answer }}</h4>
        {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
        <p class="vocalized-answer" lang="ar" dir="rtl">
@@ -34,6 +32,7 @@
        </p>
        {% endif %}
        {% else %}
+       <p class="card-side-label">QUESTION</p>
        <h4>{{ card.question }}</h4>
        {% if card.question_vocalized %}
        <p class="vocalized-answer" lang="ar" dir="rtl">
@@ -42,7 +41,7 @@
        {% endif %}
        {% endif %}
        <details>
-           <summary>Reveal Answer</summary>
+           <summary>Reveal {% if flipped %}Question{% else %}Answer{% endif %}</summary>
            {% if flipped %}
              <p>{{ card.question }}</p>
              {% if card.question_vocalized %}
@@ -59,8 +58,10 @@
              {% endif %}
            {% endif %}
        </details>
-        <hr>
+       </div>
+        <div class="review-actions">
         {% include "cards/card_check_form.html" with solved=True %}
         {% include "cards/card_check_form.html" with solved=False %}
+        </div>
     {% endif %}
 </article>

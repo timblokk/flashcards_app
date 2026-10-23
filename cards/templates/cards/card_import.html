@@ -1,30 +1,33 @@
 {% extends "cards/base_cards.html" %}
 {% block content %}
-    <h2>Import cards</h2>
-    <p>Upload a CSV or Excel (.xlsx) file with columns named
-       <code>question</code> and <code>answer</code>. Excel files use the first worksheet.
-       Imported cards are added to box 1.</p>
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-            <ul class="form-errors" role="alert">
-                {% for error in form.non_field_errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-        {% for field in form %}
-            <p>
-                {{ field.label_tag }}
-                {{ field }}
-                {% if field.help_text %}
-                    <small>{{ field.help_text }}</small>
-                {% endif %}
-                {% for error in field.errors %}
-                    <span class="field-error" role="alert">{{ error }}</span>
-                {% endfor %}
-            </p>
-        {% endfor %}
-        <button type="submit">Validate and import</button>
-    </form>
+    <section class="form-panel">
+        <p class="eyebrow">GROW YOUR DECK</p>
+        <h1>Import cards</h1>
+        <p class="form-intro">Upload a CSV or Excel (.xlsx) file with columns named <code>question</code> and <code>answer</code>. Excel files use the first worksheet. Imported cards start in box 1.</p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <ul class="form-errors" role="alert">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            {% for field in form %}
+                <p>
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.help_text %}
+                        <small>{{ field.help_text }}</small>
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <span class="field-error" role="alert">{{ error }}</span>
+                    {% endfor %}
+                </p>
+            {% endfor %}
+            <div class="form-footer">
+                <button type="submit" class="button button-primary">Validate and import</button>
+            </div>
+        </form>
+    </section>
 {% endblock %}

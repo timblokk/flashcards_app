@@ -1,18 +1,25 @@
 {% extends "cards/base_cards.html" %}
 {% load humanize %}
 {% block content %}
-    <h2>
-        All Cards
-    </h2>
-    <a href="{% url 'card-create' %}" role="button">
-        🪄 Create New Card
-    </a>
+    <section class="page-heading">
+        <div>
+            <p class="eyebrow">YOUR LEARNING SPACE</p>
+            <h1>My cards</h1>
+            <p class="page-intro">Keep your momentum going, one small step at a time.</p>
+        </div>
+        <a class="button button-primary" href="{% url 'card-create' %}">＋ Create a card</a>
+    </section>
     {% for card in card_list %}
         {% ifchanged %}
-          <h3>🗃 {{ card.box | ordinal }} Box</h3>
+          <h2 class="section-label">{{ card.box | ordinal }} box</h2>
         {% endifchanged %}
         {% include "cards/card.html" %}
-
+    {% empty %}
+        <section class="empty-state">
+            <span class="empty-icon" aria-hidden="true">✦</span>
+            <h2>Your first card is waiting</h2>
+            <p>Add a question and answer, then build a daily learning habit.</p>
+            <a class="button button-primary" href="{% url 'card-create' %}">Create your first card</a>
+        </section>
     {% endfor %}
-
 {% endblock content %}

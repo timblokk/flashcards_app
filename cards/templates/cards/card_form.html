@@ -1,18 +1,23 @@
 {% extends "cards/base_cards.html" %}
 {% load static %}
 {% block content %}
-   {% if card %}
-       <h2>✏️ Edit Card</h2>
-   {% else %}
-       <h2>🪄 Create New Card</h2>
-   {% endif %}
-    <form method="post" id="card-form" data-dictionary-url="{% url 'dictionary-suggest' %}">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <input type="submit" value="Save Card">
-    </form>
-    <a href="{% url 'card-list' %}">
-        ❌ Cancel
-    </a>
+    <section class="form-panel">
+        <p class="eyebrow">{% if card %}UPDATE YOUR DECK{% else %}BUILD YOUR DECK{% endif %}</p>
+        {% if card %}
+            <h1>Edit card</h1>
+            <p class="form-intro">Make a quick change and keep learning.</p>
+        {% else %}
+            <h1>Create a card</h1>
+            <p class="form-intro">Add a question and answer. Any language works.</p>
+        {% endif %}
+        <form method="post" id="card-form" data-dictionary-url="{% url 'dictionary-suggest' %}">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <div class="form-footer">
+                <button type="submit" class="button button-primary">Save card</button>
+                <a class="button button-secondary" href="{% url 'card-list' %}">Cancel</a>
+            </div>
+        </form>
+    </section>
     <script src="{% static 'cards/js/dictionary_autocomplete.js' %}" defer></script>
 {% endblock %}

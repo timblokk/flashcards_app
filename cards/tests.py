@@ -454,7 +454,7 @@ class CardImportTests(TestCase):
 		for url in (reverse("card-create"), reverse("card-import")):
 			with self.subTest(url=url):
 				response = self.client.get(url)
-				self.assertContains(response, "Cards")
+				self.assertContains(response, "My cards")
 				self.assertContains(response, "<mark>1</mark>")
 				self.assertContains(response, "<mark>0</mark>")
 
