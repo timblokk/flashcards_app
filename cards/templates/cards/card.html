@@ -1,20 +1,6 @@
 <article>
   <h4>
-  {% if language == "de" %}
-    {{ card.question_de }}
-  {% elif language == "en" %}
-    {{ card.question_en }}
-  {% elif language == "pt" %}
-    {{ card.question_pt }}
-  {% elif language == "it" %}
-    {{ card.question_it }}
-  {% elif language == "es" %}
-    {{ card.question_es }}
-  {% elif language == "pl" %}
-    {{ card.question_pl }}
-  {% else %}
-    {{ card.question_de }}
-  {% endif %}
+    {{ card.question }}
   </h4>
     {% if not check_card %}
     <p> 

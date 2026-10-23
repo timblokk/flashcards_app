@@ -22,4 +22,4 @@ cards["box"] = 1
 
 for i in range(0, len(cards["answer"])):
     Card(answer= cards["answer"][i], date_moved= cards["date_moved"][i], category= cards["category"][i], box= cards["box"][i], date_created=
- cards["date_created"][i], question_de = cards["de"][i]).save()
+ cards["date_created"][i], question = cards["de"][i]).save()
