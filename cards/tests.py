@@ -1,4 +1,5 @@
 import json
+from html.parser import HTMLParser
 from io import BytesIO
 from datetime import timedelta
 from io import StringIO
@@ -16,6 +17,50 @@ from django.urls import NoReverseMatch, reverse
 
 from cards.forms import CardForm
 from cards.models import Card, DictionaryEntry
+
+
+class ArabicDisplayParser(HTMLParser):
+	def __init__(self):
+		super().__init__()
+		self.displays = []
+		self._active_display = None
+		self._depth = 0
+
+	def handle_starttag(self, tag, attrs):
+		attributes = dict(attrs)
+		if self._active_display is not None:
+			self._depth += 1
+		elif "arabic-display" in attributes.get("class", "").split():
+			self._active_display = {
+				"id": attributes.get("id"),
+				"text": [],
+			}
+			self._depth = 1
+
+	def handle_data(self, data):
+		if self._active_display is not None:
+			self._active_display["text"].append(data)
+
+	def handle_endtag(self, tag):
+		if self._active_display is None:
+			return
+		self._depth -= 1
+		if self._depth == 0:
+			self.displays.append({
+				"id": self._active_display["id"],
+				"text": " ".join("".join(self._active_display["text"]).split()),
+			})
+			self._active_display = None
+
+
+def arabic_display_texts(response, element_id):
+	parser = ArabicDisplayParser()
+	parser.feed(response.content.decode())
+	return [
+		display["text"]
+		for display in parser.displays
+		if display["id"] == element_id
+	]
 
 
 class DictionarySuggestionTests(TestCase):
@@ -74,6 +119,24 @@ class DictionarySuggestionTests(TestCase):
 		self.assertEqual(card.answer_vocalized, "التُّفَّاحَةُ")
 		self.assertEqual(card.user.username, "card-owner")
 
+	def test_dictionary_suggestion_allows_custom_vocalized_answer(self):
+		self.client.force_login(get_user_model().objects.create_user("custom-vocalization-owner"))
+		entry = DictionaryEntry.objects.get(headword="Apple")
+		response = self.client.post(
+			reverse("card-create"),
+			{
+				"question": "Apple",
+				"answer": "التفاحة",
+				"answer_vocalized": "تَفَّاحَةٌ",
+				"dictionary_entry_id": entry.id,
+				"box": 1,
+			},
+		)
+
+		self.assertRedirects(response, reverse("card-create"))
+		card = Card.objects.get(question="Apple")
+		self.assertEqual(card.answer_vocalized, "تَفَّاحَةٌ")
+
 
 class AccountDeckTests(TestCase):
 	def create_card(self, **kwargs):
@@ -118,6 +181,7 @@ class AccountDeckTests(TestCase):
 		create_response = self.client.get(reverse("card-create"))
 		self.assertContains(create_response, 'name="question"')
 		self.assertContains(create_response, 'name="answer"')
+		self.assertContains(create_response, 'name="answer_vocalized"')
 		self.assertNotContains(create_response, 'name="category"')
 		self.assertNotContains(create_response, 'name="language"')
 		self.assertNotContains(create_response, 'name="question_en"')
@@ -346,6 +410,17 @@ class CardImportTests(TestCase):
 		other_user = get_user_model().objects.create_user("other-deck")
 		self.assertEqual(Card.objects.filter(user=other_user).count(), 0)
 
+	def test_csv_upload_leaves_arabic_vocalization_blank_without_dictionary_entry(self):
+		answer = "هي تحب ان تذهب"
+		response = self.upload(
+			"arabic-cards.csv",
+			f"question,answer\nphrase,{answer}\n".encode("utf-8"),
+		)
+
+		self.assertRedirects(response, reverse("card-list"))
+		card = Card.objects.get(user=self.user, question="phrase")
+		self.assertEqual(card.answer_vocalized, "")
+
 	def test_xlsx_upload_creates_cards_with_unrestricted_question_text(self):
 		from openpyxl import Workbook
 
@@ -534,6 +609,59 @@ class CardImportTests(TestCase):
 
 
 class ArabicVocalizationTests(TestCase):
+	def test_json_vocalization_is_paired_with_arabic_text_on_both_faces(self):
+		user = get_user_model().objects.create_user("arbitrary-arabic-owner")
+		self.client.force_login(user)
+		question = "لماذا لا تأتي إلى البيت"
+		answer = "هي تحب ان تذهب"
+		question_vocalized = "لِمَاذَا لَا تَأْتِي إِلَى الْبَيْتِ"
+		answer_vocalized = "هِيَ تُحِبُّ أَنْ تَذْهَبَ"
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Why do you not come home",
+			translation=question,
+			vocalized_translation=question_vocalized,
+		)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="She likes to go",
+			translation=answer,
+			vocalized_translation=answer_vocalized,
+		)
+		card = Card.objects.create(user=user, question=question, answer=answer)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		for flip in (None, "1"):
+			response = self.client.get(
+				reverse("todo-list"),
+				{"flip": flip} if flip else {},
+			)
+
+			self.assertEqual(
+				arabic_display_texts(response, f"question-{card.id}"),
+				[f"{question} {question_vocalized}"],
+			)
+			self.assertEqual(
+				arabic_display_texts(response, f"answer-{card.id}"),
+				[f"{answer} {answer_vocalized}"],
+			)
+
+	def test_manually_entered_vocalization_is_saved_with_arabic_answer(self):
+		answer = "هي تحب ان تذهب"
+		vocalized_answer = "هِيَ تُحِبُّ أَنْ تَذْهَبَ"
+		form = CardForm(data={
+			"question": "Arabic phrase",
+			"answer": answer,
+			"answer_vocalized": vocalized_answer,
+			"box": 1,
+		})
+
+		self.assertTrue(form.is_valid())
+		card = form.save()
+
+		self.assertEqual(card.answer_vocalized, vocalized_answer)
+
 	def test_repeat_card_shows_vocalized_question_before_revealing_answer(self):
 		user = get_user_model().objects.create_user("arabic-question-owner")
 		self.client.force_login(user)
@@ -558,6 +686,26 @@ class ArabicVocalizationTests(TestCase):
 		self.assertContains(response, "Reveal Answer")
 		self.assertContains(response, 'name="flip"')
 		self.assertNotContains(response, 'name="flip" value="1" checked')
+		self.assertContains(response, 'class="flip-face flip-front"')
+		self.assertContains(response, 'class="flip-face flip-back"')
+		self.assertContains(response, 'class="flip-toggle flip-forward"')
+		self.assertContains(response, "Reveal Answer")
+		self.assertContains(response, 'class="flip-toggle flip-return"')
+		self.assertContains(response, "Show Question")
+		self.assertContains(response, 'aria-label="Reveal answer"')
+		front = response.content.decode().split(
+			'class="flip-face flip-front"',
+			1,
+		)[1].split('class="flip-face flip-back"', 1)[0]
+		back = response.content.decode().split(
+			'class="flip-face flip-back"',
+			1,
+		)[1].split("</section>", 1)[0]
+		self.assertIn('class="card-side-label">QUESTION', front)
+		self.assertIn('class="card-side-label">ANSWER', back)
+		self.assertIn("مريض", front)
+		self.assertIn("مَرِيضٌ", front)
+		self.assertIn("Sick", back)
 		self.assertEqual(card.answer_vocalized, "")
 
 	def test_flipped_repeat_card_shows_answer_first_and_question_after_reveal(self):
@@ -582,9 +730,21 @@ class ArabicVocalizationTests(TestCase):
 
 		self.assertContains(response, 'name="flip"')
 		self.assertContains(response, "checked")
-		self.assertLess(rendered.index("<h4>Sick</h4>"), rendered.index("<details>"))
-		self.assertLess(rendered.index("<details>"), rendered.index("<p>مريض</p>"))
-		self.assertLess(rendered.index("<p>مريض</p>"), rendered.index("مَرِيضٌ"))
+		self.assertContains(response, "Reveal Answer")
+		self.assertNotContains(response, "Reveal Question")
+		flipped_front = rendered.split(
+			'class="flip-face flip-front"',
+			1,
+		)[1].split('class="flip-face flip-back"', 1)[0]
+		flipped_back = rendered.split(
+			'class="flip-face flip-back"',
+			1,
+		)[1].split("</section>", 1)[0]
+		self.assertIn('class="card-side-label">QUESTION', flipped_front)
+		self.assertIn('class="card-side-label">ANSWER', flipped_back)
+		self.assertIn("Sick", flipped_front)
+		self.assertIn("مريض", flipped_back)
+		self.assertIn("مَرِيضٌ", flipped_back)
 
 	def test_arabic_answer_vocalization_is_shown_on_both_repeat_sides(self):
 		user = get_user_model().objects.create_user("arabic-answer-owner")
@@ -606,26 +766,24 @@ class ArabicVocalizationTests(TestCase):
 		default_response = self.client.get(reverse("todo-list"))
 		default_rendered = default_response.content.decode()
 		self.assertContains(default_response, "مَرِيضٌ")
-		self.assertLess(
-			default_rendered.index("<details>"),
-			default_rendered.index("<p>مريض</p>"),
-		)
-		self.assertLess(
-			default_rendered.index("<p>مريض</p>"),
-			default_rendered.index("مَرِيضٌ"),
-		)
+		default_back = default_rendered.split(
+			'class="flip-face flip-back"',
+			1,
+		)[1].split("</section>", 1)[0]
+		self.assertIn('class="card-side-label">ANSWER', default_back)
+		self.assertIn("مريض", default_back)
+		self.assertIn("مَرِيضٌ", default_back)
 
 		flipped_response = self.client.get(reverse("todo-list"), {"flip": "1"})
 		flipped_rendered = flipped_response.content.decode()
 		self.assertContains(flipped_response, "مَرِيضٌ")
-		self.assertLess(
-			flipped_rendered.index("<h4>مريض</h4>"),
-			flipped_rendered.index("مَرِيضٌ"),
-		)
-		self.assertLess(
-			flipped_rendered.index("مَرِيضٌ"),
-			flipped_rendered.index("<details>"),
-		)
+		flipped_front = flipped_rendered.split(
+			'class="flip-face flip-front"',
+			1,
+		)[1].split('class="flip-face flip-back"', 1)[0]
+		self.assertIn('class="card-side-label">QUESTION', flipped_front)
+		self.assertIn("مريض", flipped_front)
+		self.assertIn("مَرِيضٌ", flipped_front)
 
 	def test_non_arabic_answers_are_not_vocalized(self):
 		form = CardForm(data={

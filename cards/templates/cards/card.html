@@ -2,18 +2,22 @@
     {% if not check_card %}
     <div class="card-content">
     <p class="card-side-label">QUESTION</p>
-    <h4>{{ card.question }}</h4>
     {% if card.question_vocalized %}
-    <p class="vocalized-answer" lang="ar" dir="rtl">
-      {{ card.question_vocalized }}
-    </p>
+    <span class="arabic-display" lang="ar" dir="rtl">
+      <span class="arabic-text">{{ card.question }}</span>
+      <span class="vocalized-answer">{{ card.question_vocalized }}</span>
+    </span>
+    {% else %}
+    <h4>{{ card.question }}</h4>
     {% endif %}
+    {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
+    <span class="arabic-display card-answer" lang="ar" dir="rtl">
+      <span class="arabic-text">{{ card.answer }}</span>
+      <span class="vocalized-answer">{{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}</span>
+    </span>
+    {% else %}
     <p class="card-answer">
       {{ card.answer }}
-    </p>
-    {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
-    <p class="vocalized-answer" lang="ar" dir="rtl">
-      {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
     </p>
     {% endif %}
     </div>
@@ -22,43 +26,68 @@
     <a class="button button-quiet" href="{% url 'card-delete' card.id %}">Delete</a>
    </div>
    {% else %}
-       <div class="card-content">
-       {% if flipped %}
-       <p class="card-side-label">ANSWER</p>
-       <h4>{{ card.answer }}</h4>
-       {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
-       <p class="vocalized-answer" lang="ar" dir="rtl">
-         {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
-       </p>
-       {% endif %}
-       {% else %}
-       <p class="card-side-label">QUESTION</p>
-       <h4>{{ card.question }}</h4>
-       {% if card.question_vocalized %}
-       <p class="vocalized-answer" lang="ar" dir="rtl">
-         {{ card.question_vocalized }}
-       </p>
-       {% endif %}
-       {% endif %}
-       <details>
-           <summary>Reveal {% if flipped %}Question{% else %}Answer{% endif %}</summary>
-           {% if flipped %}
-             <p>{{ card.question }}</p>
-             {% if card.question_vocalized %}
-             <p class="vocalized-answer" lang="ar" dir="rtl">
-               {{ card.question_vocalized }}
-             </p>
-             {% endif %}
-           {% else %}
-             <p>{{ card.answer }}</p>
-             {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
-             <p class="vocalized-answer" lang="ar" dir="rtl">
-               {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
-             </p>
-             {% endif %}
-           {% endif %}
-       </details>
-       </div>
+        <div class="study-flip-card">
+            <input
+                class="flip-state"
+                id="study-flip-{{ card.id }}"
+                type="checkbox"
+                aria-label="Reveal answer"
+            >
+            <div class="flip-scene">
+                <section class="flip-face flip-front" aria-labelledby="{% if flipped %}answer{% else %}question{% endif %}-{{ card.id }}">
+                    {% if flipped %}
+                        <p class="card-side-label">QUESTION</p>
+                        {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
+                            <span id="answer-{{ card.id }}" class="arabic-display" lang="ar" dir="rtl">
+                                <span class="arabic-text">{{ card.answer }}</span>
+                                <span class="vocalized-answer">{{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}</span>
+                            </span>
+                        {% else %}
+                            <h4 id="answer-{{ card.id }}">{{ card.answer }}</h4>
+                        {% endif %}
+                    {% else %}
+                        <p class="card-side-label">QUESTION</p>
+                        {% if card.question_vocalized %}
+                            <span id="question-{{ card.id }}" class="arabic-display" lang="ar" dir="rtl">
+                                <span class="arabic-text">{{ card.question }}</span>
+                                <span class="vocalized-answer">{{ card.question_vocalized }}</span>
+                            </span>
+                        {% else %}
+                            <h4 id="question-{{ card.id }}">{{ card.question }}</h4>
+                        {% endif %}
+                    {% endif %}
+                </section>
+                <section class="flip-face flip-back" aria-labelledby="{% if flipped %}question{% else %}answer{% endif %}-{{ card.id }}">
+                    {% if flipped %}
+                        <p class="card-side-label">ANSWER</p>
+                        {% if card.question_vocalized %}
+                            <span id="question-{{ card.id }}" class="arabic-display" lang="ar" dir="rtl">
+                                <span class="arabic-text">{{ card.question }}</span>
+                                <span class="vocalized-answer">{{ card.question_vocalized }}</span>
+                            </span>
+                        {% else %}
+                            <h4 id="question-{{ card.id }}">{{ card.question }}</h4>
+                        {% endif %}
+                    {% else %}
+                        <p class="card-side-label">ANSWER</p>
+                        {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
+                            <span id="answer-{{ card.id }}" class="arabic-display" lang="ar" dir="rtl">
+                                <span class="arabic-text">{{ card.answer }}</span>
+                                <span class="vocalized-answer">{{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}</span>
+                            </span>
+                        {% else %}
+                            <h4 id="answer-{{ card.id }}">{{ card.answer }}</h4>
+                        {% endif %}
+                    {% endif %}
+                </section>
+            </div>
+            <label class="flip-toggle flip-forward" for="study-flip-{{ card.id }}">
+                Reveal Answer
+            </label>
+            <label class="flip-toggle flip-return" for="study-flip-{{ card.id }}">
+                Show Question
+            </label>
+        </div>
         <div class="review-actions">
         {% include "cards/card_check_form.html" with solved=True %}
         {% include "cards/card_check_form.html" with solved=False %}

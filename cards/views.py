@@ -27,7 +27,7 @@ from .forms import (
 from .forms import CardCheckForm
 
 
-def with_vocalized_questions(cards):
+def with_card_vocalizations(cards):
     question_vocalization = DictionaryEntry.objects.filter(
         language_pair="en-ar",
         translation=OuterRef("question"),
@@ -40,10 +40,11 @@ def with_vocalized_questions(cards):
     ).exclude(
         vocalized_translation="",
     ).order_by("pk").values("vocalized_translation")[:1]
-    return cards.annotate(
+    cards_with_dictionary_vocalizations = cards.annotate(
         question_vocalized=Subquery(question_vocalization),
         answer_dictionary_vocalized=Subquery(answer_vocalization),
     )
+    return cards_with_dictionary_vocalizations
 
 
 def dictionary_suggestions(request):
@@ -79,10 +80,11 @@ class SignUpView(FormView):
 
 class CardListView(LoginRequiredMixin, ListView):
     model = Card
-    template = "cards/card_list.html"
+    template_name = "cards/card_list.html"
+    context_object_name = "card_list"
 
     def get_queryset(self):
-        return with_vocalized_questions(
+        return with_card_vocalizations(
             Card.objects.filter(
                 user=self.request.user,
             ).order_by("box", "-date_created")
@@ -225,7 +227,7 @@ class CardDeleteView(LoginRequiredMixin, DeleteView):
 class BoxView(CardListView):
     template_name = "cards/box.html"
     def get_queryset(self):
-        return with_vocalized_questions(
+        return with_card_vocalizations(
             Card.objects.filter(
                 user=self.request.user,
                 box=self.kwargs["box_num"],
@@ -246,7 +248,7 @@ class CardRepeatView(CardListView):
     def get_queryset(self):
         object_list = [
             card
-            for card in with_vocalized_questions(
+            for card in with_card_vocalizations(
                 Card.objects.filter(
                     user=self.request.user,
                 )

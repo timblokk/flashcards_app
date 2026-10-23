@@ -8,17 +8,21 @@ from .card_import import parse_card_import
 
 class CardForm(forms.ModelForm):
     dictionary_entry_id = forms.IntegerField(required=False, widget=forms.HiddenInput)
+    answer_vocalized = forms.CharField(
+        required=False,
+        label="Vocalized answer (optional)",
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text="Filled from a dictionary suggestion when available; you can edit it.",
+    )
 
     class Meta:
         model = Card
-        fields = ["question", "answer", "box"]
+        fields = ["question", "answer", "answer_vocalized", "box"]
         labels = {"answer": "Answer / translation"}
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user or self.instance.user
-        self._original_answer = self.instance.answer
-        self._original_vocalized_answer = self.instance.answer_vocalized
         self._dictionary_entry = None
 
     def clean(self):
@@ -34,6 +38,10 @@ class CardForm(forms.ModelForm):
             else:
                 cleaned_data["question"] = self._dictionary_entry.headword
                 cleaned_data["answer"] = self._dictionary_entry.translation
+                if not cleaned_data.get("answer_vocalized"):
+                    cleaned_data["answer_vocalized"] = (
+                        self._dictionary_entry.vocalized_translation
+                    )
         question = cleaned_data.get("question")
         answer = cleaned_data.get("answer")
         if question and self.user is not None:
@@ -52,13 +60,6 @@ class CardForm(forms.ModelForm):
 
     def save(self, commit=True):
         card = super().save(commit=False)
-        if self._dictionary_entry:
-            card.answer_vocalized = self._dictionary_entry.vocalized_translation
-        elif card.answer != self._original_answer:
-            card.answer_vocalized = ""
-        else:
-            card.answer_vocalized = self._original_vocalized_answer
-
         if commit:
             card.save()
             self.save_m2m()

@@ -20,6 +20,7 @@ def _get_vocalizer():
     return TashkeelClass()
 
 
+@lru_cache(maxsize=2048)
 def vocalize_arabic(text):
     if not contains_arabic(text):
         return ""

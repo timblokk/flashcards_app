@@ -4,6 +4,7 @@
 
     const headwordInput = form.querySelector("#id_question");
     const translationInput = form.querySelector("#id_answer");
+    const vocalizedTranslationInput = form.querySelector("#id_answer_vocalized");
     const dictionaryEntryInput = form.querySelector("#id_dictionary_entry_id");
     if (!headwordInput || !translationInput) return;
 
@@ -20,6 +21,20 @@
     let timer;
     let controller;
     let requestNumber = 0;
+    let selectedVocalizedTranslation = "";
+
+    const clearSelectedEntry = () => {
+        if (dictionaryEntryInput?.value) {
+            dictionaryEntryInput.value = "";
+            if (
+                vocalizedTranslationInput
+                && vocalizedTranslationInput.value === selectedVocalizedTranslation
+            ) {
+                vocalizedTranslationInput.value = "";
+            }
+            selectedVocalizedTranslation = "";
+        }
+    };
 
     const closeSuggestions = () => {
         suggestions.replaceChildren();
@@ -31,7 +46,10 @@
         headwordInput.value = entry.headword;
         translationInput.value = entry.translation;
         if (dictionaryEntryInput) dictionaryEntryInput.value = entry.id;
-        translationInput.dispatchEvent(new Event("input", { bubbles: true }));
+        selectedVocalizedTranslation = entry.vocalized_translation || "";
+        if (vocalizedTranslationInput) {
+            vocalizedTranslationInput.value = selectedVocalizedTranslation;
+        }
         closeSuggestions();
         headwordInput.focus();
     };
@@ -59,7 +77,7 @@
 
     headwordInput.addEventListener("input", () => {
         window.clearTimeout(timer);
-        if (dictionaryEntryInput) dictionaryEntryInput.value = "";
+        clearSelectedEntry();
         const query = headwordInput.value.trim();
         if (query.length < 2) {
             if (controller) controller.abort();
@@ -89,6 +107,8 @@
             }
         }, 180);
     });
+
+    translationInput.addEventListener("input", clearSelectedEntry);
 
     headwordInput.addEventListener("keydown", (event) => {
         if (event.key === "ArrowDown" && !suggestions.hidden) {
