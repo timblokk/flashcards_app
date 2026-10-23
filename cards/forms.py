@@ -1,25 +1,9 @@
 # cards/forms.py
-from unicodedata import category
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from .models import CAT_CHOICES
 from .models import BOXES, Card, DictionaryEntry
 from .card_import import parse_card_import
-
-
-def get_category_choices(user):
-    category_settings = getattr(user, "category_settings", None)
-    if category_settings is None or category_settings.arabic_only:
-        return [("Arabic", "Arabic")]
-    return CAT_CHOICES
-
-
-def get_default_category(user):
-    category_settings = getattr(user, "category_settings", None)
-    if category_settings is not None and not category_settings.arabic_only:
-        return "F6"
-    return "Arabic"
 
 
 class CardForm(forms.ModelForm):
@@ -27,15 +11,12 @@ class CardForm(forms.ModelForm):
 
     class Meta:
         model = Card
-        fields = ["question", "answer", "box", "category"]
+        fields = ["question", "answer", "box"]
         labels = {"answer": "Answer / translation"}
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user or self.instance.user
-        if user is not None:
-            self.fields["category"].choices = get_category_choices(user)
-            self.fields["category"].initial = get_default_category(user)
         self._original_answer = self.instance.answer
         self._original_vocalized_answer = self.instance.answer_vocalized
         self._dictionary_entry = None
@@ -91,16 +72,6 @@ class CardCheckForm(forms.Form):
 class CardUpdateForm(forms.Form):
     card_id = forms.IntegerField(required=True)
     solved = forms.BooleanField(required=False)
-
-class CardCategoriesFilterForm(forms.Form):
-    category = forms.ChoiceField(choices=CAT_CHOICES)
-
-    def __init__(self, *args, user=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if user is not None:
-            self.fields["category"].choices = get_category_choices(user)
-            self.fields["category"].initial = get_default_category(user)
-
 
 class CardImportForm(forms.Form):
     file = forms.FileField(label="CSV or Excel file")
