@@ -5,6 +5,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.db import IntegrityError, transaction
+from django.db.models import OuterRef, Subquery
 from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -30,6 +31,18 @@ from .forms import (
 from .forms import CardCheckForm
 from .forms import CardCategoriesFilterForm
 from django.shortcuts import render
+
+
+def with_vocalized_questions(cards):
+    vocalized_translation = DictionaryEntry.objects.filter(
+        language_pair="en-ar",
+        translation=OuterRef("question"),
+    ).exclude(
+        vocalized_translation="",
+    ).order_by("pk").values("vocalized_translation")[:1]
+    return cards.annotate(
+        question_vocalized=Subquery(vocalized_translation),
+    )
 
 
 def dictionary_suggestions(request):
@@ -132,10 +145,12 @@ class CardListView(CardNavigationContextMixin, LoginRequiredMixin, ListView):
     template = "cards/card_list.html"
 
     def get_queryset(self):
-            return Card.objects.filter(
+        return with_vocalized_questions(
+            Card.objects.filter(
                 user=self.request.user,
                 category=self.get_category(),
             ).order_by("box", "-date_created")
+        )
 
 
 class CardCreateView(CardNavigationContextMixin, LoginRequiredMixin, CreateView):
@@ -276,10 +291,12 @@ class CardDeleteView(LoginRequiredMixin, DeleteView):
 class BoxView(CardListView):
     template_name = "cards/box.html"
     def get_queryset(self):
-        return Card.objects.filter(
-            user=self.request.user,
-            box=self.kwargs["box_num"],
-            category=self.get_category(),
+        return with_vocalized_questions(
+            Card.objects.filter(
+                user=self.request.user,
+                box=self.kwargs["box_num"],
+                category=self.get_category(),
+            )
         )
 
     def get_context_data(self, **kwargs):
@@ -296,9 +313,11 @@ class CardRepeatView(CardListView):
     def get_queryset(self):
         object_list = [
             card
-            for card in Card.objects.filter(
-                user=self.request.user,
-                category=self.get_category(),
+            for card in with_vocalized_questions(
+                Card.objects.filter(
+                    user=self.request.user,
+                    category=self.get_category(),
+                )
             )
             if card.to_repeat
         ]

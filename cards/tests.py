@@ -543,6 +543,31 @@ class CardImportTests(TestCase):
 
 
 class ArabicVocalizationTests(TestCase):
+	def test_repeat_card_shows_vocalized_question_before_revealing_answer(self):
+		user = get_user_model().objects.create_user("arabic-question-owner")
+		self.client.force_login(user)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Sick",
+			translation="مريض",
+			vocalized_translation="مَرِيضٌ",
+		)
+		card = Card.objects.create(
+			user=user,
+			question="مريض",
+			answer="Sick",
+			category="Arabic",
+		)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		response = self.client.get(reverse("todo-list"))
+
+		self.assertContains(response, "مريض")
+		self.assertContains(response, "مَرِيضٌ")
+		self.assertContains(response, "Reveal Answer")
+		self.assertEqual(card.answer_vocalized, "")
+
 	def test_non_arabic_answers_are_not_vocalized(self):
 		form = CardForm(data={
 			"question": "Haus",

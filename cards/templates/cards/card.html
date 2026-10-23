@@ -2,6 +2,11 @@
   <h4>
     {{ card.question }}
   </h4>
+  {% if card.question_vocalized %}
+  <p class="vocalized-answer" lang="ar" dir="rtl">
+    {{ card.question_vocalized }}
+  </p>
+  {% endif %}
     {% if not check_card %}
     <p> 
       {{ card.answer }}
