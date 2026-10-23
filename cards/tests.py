@@ -566,7 +566,78 @@ class ArabicVocalizationTests(TestCase):
 		self.assertContains(response, "مريض")
 		self.assertContains(response, "مَرِيضٌ")
 		self.assertContains(response, "Reveal Answer")
+		self.assertContains(response, 'name="flip"')
+		self.assertNotContains(response, 'name="flip" value="1" checked')
 		self.assertEqual(card.answer_vocalized, "")
+
+	def test_flipped_repeat_card_shows_answer_first_and_question_after_reveal(self):
+		user = get_user_model().objects.create_user("flipped-arabic-question-owner")
+		self.client.force_login(user)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Sick",
+			translation="مريض",
+			vocalized_translation="مَرِيضٌ",
+		)
+		card = Card.objects.create(
+			user=user,
+			question="مريض",
+			answer="Sick",
+			category="Arabic",
+		)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		response = self.client.get(reverse("todo-list"), {"flip": "1"})
+		rendered = response.content.decode()
+
+		self.assertContains(response, 'name="flip"')
+		self.assertContains(response, "checked")
+		self.assertLess(rendered.index("<h4>Sick</h4>"), rendered.index("<details>"))
+		self.assertLess(rendered.index("<details>"), rendered.index("<p>مريض</p>"))
+		self.assertLess(rendered.index("<p>مريض</p>"), rendered.index("مَرِيضٌ"))
+
+	def test_arabic_answer_vocalization_is_shown_on_both_repeat_sides(self):
+		user = get_user_model().objects.create_user("arabic-answer-owner")
+		self.client.force_login(user)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Sick",
+			translation="مريض",
+			vocalized_translation="مَرِيضٌ",
+		)
+		card = Card.objects.create(
+			user=user,
+			question="Sick",
+			answer="مريض",
+			category="Arabic",
+		)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		default_response = self.client.get(reverse("todo-list"))
+		default_rendered = default_response.content.decode()
+		self.assertContains(default_response, "مَرِيضٌ")
+		self.assertLess(
+			default_rendered.index("<details>"),
+			default_rendered.index("<p>مريض</p>"),
+		)
+		self.assertLess(
+			default_rendered.index("<p>مريض</p>"),
+			default_rendered.index("مَرِيضٌ"),
+		)
+
+		flipped_response = self.client.get(reverse("todo-list"), {"flip": "1"})
+		flipped_rendered = flipped_response.content.decode()
+		self.assertContains(flipped_response, "مَرِيضٌ")
+		self.assertLess(
+			flipped_rendered.index("<h4>مريض</h4>"),
+			flipped_rendered.index("مَرِيضٌ"),
+		)
+		self.assertLess(
+			flipped_rendered.index("مَرِيضٌ"),
+			flipped_rendered.index("<details>"),
+		)
 
 	def test_non_arabic_answers_are_not_vocalized(self):
 		form = CardForm(data={
@@ -597,6 +668,7 @@ class ArabicVocalizationTests(TestCase):
 		})
 		self.assertTrue(form.is_valid())
 		card = form.save()
+		card.answer_dictionary_vocalized = entry.vocalized_translation
 
 		rendered = render_to_string("cards/card.html", {
 			"card": card,

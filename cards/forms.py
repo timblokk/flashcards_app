@@ -65,7 +65,7 @@ class CardForm(forms.ModelForm):
             if duplicates.exists():
                 self.add_error(
                     "question",
-                    "A card with this question and answer already exists.",
+                    "A card with this question already exists.",
                 )
         return cleaned_data
 

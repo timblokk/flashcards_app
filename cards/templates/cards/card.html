@@ -1,19 +1,17 @@
 <article>
-  <h4>
-    {{ card.question }}
-  </h4>
-  {% if card.question_vocalized %}
-  <p class="vocalized-answer" lang="ar" dir="rtl">
-    {{ card.question_vocalized }}
-  </p>
-  {% endif %}
     {% if not check_card %}
+    <h4>{{ card.question }}</h4>
+    {% if card.question_vocalized %}
+    <p class="vocalized-answer" lang="ar" dir="rtl">
+      {{ card.question_vocalized }}
+    </p>
+    {% endif %}
     <p> 
       {{ card.answer }}
     </p>
-    {% if card.answer_vocalized %}
+    {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
     <p class="vocalized-answer" lang="ar" dir="rtl">
-      {{ card.answer_vocalized }}
+      {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
     </p>
     {% endif %}
    <hr>
@@ -28,17 +26,39 @@
     </a>  
   </div>
    {% else %}
-        <details>
-            <summary>Reveal Answer</summary>
-            <p>
-              {{ card.answer }}
-            </p>
-            {% if card.answer_vocalized %}
-            <p class="vocalized-answer" lang="ar" dir="rtl">
-              {{ card.answer_vocalized }}
-            </p>
-            {% endif %}
-        </details>
+       {% if flipped %}
+       <h4>{{ card.answer }}</h4>
+       {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
+       <p class="vocalized-answer" lang="ar" dir="rtl">
+         {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
+       </p>
+       {% endif %}
+       {% else %}
+       <h4>{{ card.question }}</h4>
+       {% if card.question_vocalized %}
+       <p class="vocalized-answer" lang="ar" dir="rtl">
+         {{ card.question_vocalized }}
+       </p>
+       {% endif %}
+       {% endif %}
+       <details>
+           <summary>Reveal Answer</summary>
+           {% if flipped %}
+             <p>{{ card.question }}</p>
+             {% if card.question_vocalized %}
+             <p class="vocalized-answer" lang="ar" dir="rtl">
+               {{ card.question_vocalized }}
+             </p>
+             {% endif %}
+           {% else %}
+             <p>{{ card.answer }}</p>
+             {% if card.answer_vocalized or card.answer_dictionary_vocalized %}
+             <p class="vocalized-answer" lang="ar" dir="rtl">
+               {{ card.answer_vocalized|default:card.answer_dictionary_vocalized }}
+             </p>
+             {% endif %}
+           {% endif %}
+       </details>
         <hr>
         {% include "cards/card_check_form.html" with solved=True %}
         {% include "cards/card_check_form.html" with solved=False %}

@@ -78,6 +78,47 @@
         direction: rtl;
         font-size: 1.2rem;
     }
+    .flip-control {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        margin: 1rem 0;
+    }
+    .flip-control label {
+        margin: 0;
+    }
+    .flip-control input {
+        appearance: none;
+        width: 3rem;
+        height: 1.6rem;
+        margin: 0;
+        border: 0;
+        border-radius: 1rem;
+        background: #a0a0a0;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    .flip-control input::before {
+        display: block;
+        width: 1.2rem;
+        height: 1.2rem;
+        margin: 0.2rem;
+        border-radius: 50%;
+        background: white;
+        content: "";
+        transition: transform 0.15s ease;
+    }
+    .flip-control input:checked {
+        background: var(--accent);
+    }
+    .flip-control input:checked::before {
+        transform: translateX(1.4rem);
+    }
+    .flip-control input:focus-visible {
+        outline: 2px solid var(--text);
+        outline-offset: 2px;
+    }
     nav form {
         display: inline;
     }

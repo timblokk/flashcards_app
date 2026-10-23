@@ -1,7 +1,18 @@
 {% extends "cards/base_cards.html" %}
 {% load humanize %}
 {% block content %}
-    <h2>🗃 {{ box_number | ordinal }} Box</h2>
+    <h2>Repeat Cards</h2>
+    <form method="get" class="flip-control">
+        <label for="flip-flashcards">Flip flashcards</label>
+        <input
+            id="flip-flashcards"
+            name="flip"
+            type="checkbox"
+            value="1"
+            {% if flipped %}checked{% endif %}
+            onchange="this.form.submit()"
+        >
+    </form>
     <mark>{{ object_list | length }}</mark> Card{{ object_list | pluralize }} left in box.
     <hr>
     {% if check_card %}

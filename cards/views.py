@@ -34,14 +34,21 @@ from django.shortcuts import render
 
 
 def with_vocalized_questions(cards):
-    vocalized_translation = DictionaryEntry.objects.filter(
+    question_vocalization = DictionaryEntry.objects.filter(
         language_pair="en-ar",
         translation=OuterRef("question"),
     ).exclude(
         vocalized_translation="",
     ).order_by("pk").values("vocalized_translation")[:1]
+    answer_vocalization = DictionaryEntry.objects.filter(
+        language_pair="en-ar",
+        translation=OuterRef("answer"),
+    ).exclude(
+        vocalized_translation="",
+    ).order_by("pk").values("vocalized_translation")[:1]
     return cards.annotate(
-        question_vocalized=Subquery(vocalized_translation),
+        question_vocalized=Subquery(question_vocalization),
+        answer_dictionary_vocalized=Subquery(answer_vocalization),
     )
 
 
@@ -325,13 +332,13 @@ class CardRepeatView(CardListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["object_list"] = self.get_queryset()
-        context["card_count"] = len(self.get_queryset())
+        object_list = context["object_list"]
+        context["card_count"] = len(object_list)
         context["category"] = self.get_category()
+        context["flipped"] = self.request.GET.get("flip") == "1"
 
-        self.queryset = self.object_list
-        if context["card_count"] >0:
-            context["check_card"] = random.choice(self.get_queryset())
+        if object_list:
+            context["check_card"] = random.choice(object_list)
 
         return context
 
