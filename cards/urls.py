@@ -27,6 +27,16 @@ urlpatterns = [
         views.CardCreateView.as_view(),
         name="card-create"
     ),
+     path(
+         "import/",
+         views.CardImportView.as_view(),
+         name="card-import",
+     ),
+     path(
+         "export/",
+         views.CardExportView.as_view(),
+         name="card-export",
+     ),
     path(
         "edit/<int:pk>",
         views.CardUpdateView.as_view(),

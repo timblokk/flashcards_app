@@ -92,6 +92,12 @@
         display: block;
         margin-top: 0.25rem;
     }
+    .messages {
+        color: #176b32;
+    }
+    .messages .warning {
+        color: #805500;
+    }
 </style>
 <body>
     <header>
@@ -99,6 +105,13 @@
         {% include "cards/navigation.html" %}
     </header>
     <main>
+        {% if messages %}
+            <ul class="messages" role="status">
+                {% for message in messages %}
+                    <li class="{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
         {% block content %}
             <h2>Bienvenue chez le meilleur Flashcards app dans le monde!</h2>
         {% endblock content %}

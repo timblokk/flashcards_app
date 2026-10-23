@@ -3,6 +3,8 @@
     {% if user.is_authenticated %}
         <a href="{% url 'fiter-categories' %}">🗂 Filter Cards</a>
         <a href="{% url 'card-list' %}">🗂 Cards for {{ category }}</a>
+        <a href="{% url 'card-import' %}">Import Cards</a>
+        <a href="{% url 'card-export' %}">Export Cards</a>
         {% repeat_box_as_link category %}
         {% boxes_as_links category %}
         <span>{{ user.username }}</span>
