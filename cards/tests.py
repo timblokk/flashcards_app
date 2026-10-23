@@ -12,7 +12,7 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 
 from cards.forms import CardForm
 from cards.models import Card, DictionaryEntry
@@ -65,7 +65,6 @@ class DictionarySuggestionTests(TestCase):
 				"answer": "التفاحة",
 				"dictionary_entry_id": DictionaryEntry.objects.get(headword="Apple").id,
 				"box": 1,
-				"category": "Arabic",
 			},
 		)
 
@@ -92,7 +91,20 @@ class AccountDeckTests(TestCase):
 			f"{reverse('login')}?next={reverse('card-list')}",
 		)
 
-	def test_new_account_only_sees_and_can_select_arabic_category(self):
+	def test_login_redirects_to_card_list(self):
+		user = get_user_model().objects.create_user(
+			"login-redirect-user",
+			password="Correct-Horse-92!",
+		)
+
+		response = self.client.post(
+			reverse("login"),
+			{"username": user.username, "password": "Correct-Horse-92!"},
+		)
+
+		self.assertRedirects(response, reverse("card-list"))
+
+	def test_new_account_creates_language_neutral_cards_without_category(self):
 		self.client.post(
 			reverse("signup"),
 			{
@@ -103,20 +115,10 @@ class AccountDeckTests(TestCase):
 		)
 		user = get_user_model().objects.get(username="new-user")
 
-		filter_response = self.client.get(
-			reverse("fiter-categories"),
-			{"category": "F6"},
-		)
-		self.assertContains(filter_response, 'value="Arabic"')
-		self.assertNotContains(filter_response, '<option value="F6">')
-		self.assertNotContains(filter_response, '<option value="livres">')
-		self.assertEqual(self.client.session["category"], "Arabic")
-
 		create_response = self.client.get(reverse("card-create"))
-		self.assertContains(create_response, 'value="Arabic"')
-		self.assertNotContains(create_response, '<option value="F6">')
 		self.assertContains(create_response, 'name="question"')
 		self.assertContains(create_response, 'name="answer"')
+		self.assertNotContains(create_response, 'name="category"')
 		self.assertNotContains(create_response, 'name="language"')
 		self.assertNotContains(create_response, 'name="question_en"')
 
@@ -126,23 +128,10 @@ class AccountDeckTests(TestCase):
 				"question": "Apple",
 				"answer": "التفاحة",
 				"box": 1,
-				"category": "F6",
-			},
-		)
-		self.assertEqual(response.status_code, 200)
-		self.assertFalse(Card.objects.filter(user=user).exists())
-
-		response = self.client.post(
-			reverse("card-create"),
-			{
-				"question": "Apple",
-				"answer": "التفاحة",
-				"box": 1,
-				"category": "Arabic",
 			},
 		)
 		self.assertRedirects(response, reverse("card-create"))
-		self.assertEqual(Card.objects.get(user=user).category, "Arabic")
+		self.assertEqual(Card.objects.get(user=user).question, "Apple")
 
 	def test_signup_shows_password_validation_errors(self):
 		response = self.client.get(reverse("signup"))
@@ -178,7 +167,6 @@ class AccountDeckTests(TestCase):
 				"question": "question",
 				"answer": "different translation",
 				"box": 1,
-				"category": "Arabic",
 			},
 			user=user,
 		)
@@ -190,7 +178,6 @@ class AccountDeckTests(TestCase):
 				"question": "question",
 				"answer": "translation",
 				"box": 1,
-				"category": "Arabic",
 			},
 			user=other_user,
 		)
@@ -218,7 +205,7 @@ class AccountDeckTests(TestCase):
 			},
 		)
 
-		self.assertRedirects(response, reverse("fiter-categories"))
+		self.assertRedirects(response, reverse("card-list"))
 		user = get_user_model().objects.get(username="legacyUser")
 		self.assertTrue(user.check_password("Correct-Horse-92!"))
 		legacy_card.refresh_from_db()
@@ -254,7 +241,6 @@ class AccountDeckTests(TestCase):
 			0,
 		)
 
-		other_client.get(reverse("fiter-categories"))
 		response = other_client.get(reverse("card-list"))
 		self.assertNotContains(response, "legacy-secret-answer")
 		self.assertNotContains(response, "<mark>1</mark>")
@@ -291,12 +277,11 @@ class AccountDeckTests(TestCase):
 	def test_box_and_repeat_pages_only_show_the_current_users_cards(self):
 		owner = get_user_model().objects.create_user("owner")
 		other_user = get_user_model().objects.create_user("other")
-		card = self.create_card(user=owner, box=1, category="Arabic")
+		card = self.create_card(user=owner, box=1)
 		card.date_moved = timezone.now() - timedelta(days=2)
 		card.save(update_fields=["date_moved"])
 
 		self.client.force_login(other_user)
-		self.client.get(reverse("fiter-categories"))
 		box_response = self.client.get(reverse("box", args=[1]))
 		repeat_response = self.client.get(reverse("todo-list"))
 
@@ -306,9 +291,22 @@ class AccountDeckTests(TestCase):
 		self.assertContains(repeat_response, "<mark>0</mark>")
 
 		self.client.force_login(owner)
-		self.client.get(reverse("fiter-categories"))
 		self.assertContains(self.client.get(reverse("box", args=[1])), "legacy-secret-answer")
 		self.assertContains(self.client.get(reverse("todo-list")), "legacy-secret-answer")
+
+	def test_home_page_shows_all_user_cards_without_filter_view(self):
+		user = get_user_model().objects.create_user("home-page-owner")
+		self.create_card(user=user)
+		self.client.force_login(user)
+
+		response = self.client.get("/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "legacy-secret-answer")
+		self.assertNotContains(response, "Filter Cards")
+		self.assertNotContains(response, 'name="category"')
+		with self.assertRaises(NoReverseMatch):
+			reverse("fiter-categories")
 
 
 class CardImportTests(TestCase):
@@ -343,7 +341,6 @@ class CardImportTests(TestCase):
 		self.assertEqual(cards[0].question, "hello")
 		self.assertEqual(cards[0].answer, "مرحبا")
 		self.assertEqual(cards[0].answer_vocalized, "مَرْحَبًا")
-		self.assertEqual(cards[0].category, "Arabic")
 		self.assertEqual(cards[0].box, 1)
 		self.assertEqual(cards[1].answer_vocalized, "")
 		other_user = get_user_model().objects.create_user("other-deck")
@@ -371,20 +368,17 @@ class CardImportTests(TestCase):
 			user=self.user,
 			answer="مرحبا",
 			question="hello",
-			category="Arabic",
 		)
 		Card.objects.create(
 			user=self.user,
 			answer="Haus",
 			question="maison",
-			category="Arabic",
 		)
 		other_user = get_user_model().objects.create_user("export-recipient")
 		Card.objects.create(
 			user=other_user,
 			answer="private",
 			question="private question",
-			category="Arabic",
 		)
 
 		export_response = self.client.get(reverse("card-export"))
@@ -449,19 +443,18 @@ class CardImportTests(TestCase):
 			],
 		)
 
-	def test_create_and_import_pages_show_current_category_box_counts(self):
+	def test_create_and_import_pages_show_all_box_counts(self):
 		Card.objects.create(
 			user=self.user,
 			answer="مرحبا",
 			question="hello",
 			box=1,
-			category="Arabic",
 		)
 
 		for url in (reverse("card-create"), reverse("card-import")):
 			with self.subTest(url=url):
 				response = self.client.get(url)
-				self.assertContains(response, "Arabic")
+				self.assertContains(response, "Cards")
 				self.assertContains(response, "<mark>1</mark>")
 				self.assertContains(response, "<mark>0</mark>")
 
@@ -510,14 +503,12 @@ class CardImportTests(TestCase):
 			user=self.user,
 			answer="world",
 			question="hello",
-			category="Arabic",
 		)
 		other_user = get_user_model().objects.create_user("other-importer")
 		Card.objects.create(
 			user=other_user,
 			answer="world",
 			question="other question",
-			category="Arabic",
 		)
 
 		response = self.upload(
@@ -556,7 +547,6 @@ class ArabicVocalizationTests(TestCase):
 			user=user,
 			question="مريض",
 			answer="Sick",
-			category="Arabic",
 		)
 		card.date_moved = timezone.now() - timedelta(days=2)
 		card.save(update_fields=["date_moved"])
@@ -566,14 +556,82 @@ class ArabicVocalizationTests(TestCase):
 		self.assertContains(response, "مريض")
 		self.assertContains(response, "مَرِيضٌ")
 		self.assertContains(response, "Reveal Answer")
+		self.assertContains(response, 'name="flip"')
+		self.assertNotContains(response, 'name="flip" value="1" checked')
 		self.assertEqual(card.answer_vocalized, "")
+
+	def test_flipped_repeat_card_shows_answer_first_and_question_after_reveal(self):
+		user = get_user_model().objects.create_user("flipped-arabic-question-owner")
+		self.client.force_login(user)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Sick",
+			translation="مريض",
+			vocalized_translation="مَرِيضٌ",
+		)
+		card = Card.objects.create(
+			user=user,
+			question="مريض",
+			answer="Sick",
+		)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		response = self.client.get(reverse("todo-list"), {"flip": "1"})
+		rendered = response.content.decode()
+
+		self.assertContains(response, 'name="flip"')
+		self.assertContains(response, "checked")
+		self.assertLess(rendered.index("<h4>Sick</h4>"), rendered.index("<details>"))
+		self.assertLess(rendered.index("<details>"), rendered.index("<p>مريض</p>"))
+		self.assertLess(rendered.index("<p>مريض</p>"), rendered.index("مَرِيضٌ"))
+
+	def test_arabic_answer_vocalization_is_shown_on_both_repeat_sides(self):
+		user = get_user_model().objects.create_user("arabic-answer-owner")
+		self.client.force_login(user)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Sick",
+			translation="مريض",
+			vocalized_translation="مَرِيضٌ",
+		)
+		card = Card.objects.create(
+			user=user,
+			question="Sick",
+			answer="مريض",
+		)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		default_response = self.client.get(reverse("todo-list"))
+		default_rendered = default_response.content.decode()
+		self.assertContains(default_response, "مَرِيضٌ")
+		self.assertLess(
+			default_rendered.index("<details>"),
+			default_rendered.index("<p>مريض</p>"),
+		)
+		self.assertLess(
+			default_rendered.index("<p>مريض</p>"),
+			default_rendered.index("مَرِيضٌ"),
+		)
+
+		flipped_response = self.client.get(reverse("todo-list"), {"flip": "1"})
+		flipped_rendered = flipped_response.content.decode()
+		self.assertContains(flipped_response, "مَرِيضٌ")
+		self.assertLess(
+			flipped_rendered.index("<h4>مريض</h4>"),
+			flipped_rendered.index("مَرِيضٌ"),
+		)
+		self.assertLess(
+			flipped_rendered.index("مَرِيضٌ"),
+			flipped_rendered.index("<details>"),
+		)
 
 	def test_non_arabic_answers_are_not_vocalized(self):
 		form = CardForm(data={
 			"question": "Haus",
 			"answer": "maison",
 			"box": 1,
-			"category": "F6",
 		})
 
 		self.assertTrue(form.is_valid())
@@ -593,10 +651,10 @@ class ArabicVocalizationTests(TestCase):
 			"answer": "التفاحة",
 			"dictionary_entry_id": entry.id,
 			"box": 1,
-			"category": "F6",
 		})
 		self.assertTrue(form.is_valid())
 		card = form.save()
+		card.answer_dictionary_vocalized = entry.vocalized_translation
 
 		rendered = render_to_string("cards/card.html", {
 			"card": card,
@@ -632,6 +690,11 @@ class ArabicVocalizationTests(TestCase):
 
 
 class ConsolidateQuestionMigrationTests(TransactionTestCase):
+	latest_migration = [(
+		"cards",
+		"0014_remove_card_category_and_account_category_settings",
+	)]
+
 	def test_migration_handles_collisions_and_restores_questions_on_rollback(self):
 		before_migration = [("cards", "0012_remove_card_uniq_card_user_answer_de_and_more")]
 		after_migration = [("cards", "0013_consolidate_question_field")]
@@ -734,4 +797,48 @@ class ConsolidateQuestionMigrationTests(TransactionTestCase):
 				{"de"},
 			)
 		finally:
-			MigrationExecutor(connection).migrate(after_migration)
+			MigrationExecutor(connection).migrate(self.latest_migration)
+
+	def test_migration_removes_category_field_and_account_settings(self):
+		before_migration = [("cards", "0013_consolidate_question_field")]
+
+		try:
+			MigrationExecutor(connection).migrate(before_migration)
+			old_apps = MigrationExecutor(connection).loader.project_state(
+				before_migration
+			).apps
+			User = old_apps.get_model("auth", "User")
+			LegacyCard = old_apps.get_model("cards", "Card")
+			CategorySettings = old_apps.get_model("cards", "AccountCategorySettings")
+			user = User.objects.create(username="category-migration-owner")
+			CategorySettings.objects.create(user_id=user.pk, arabic_only=True)
+			LegacyCard.objects.create(
+				user_id=user.pk,
+				answer="translation",
+				question="question",
+				category="Arabic",
+			)
+
+			MigrationExecutor(connection).migrate(self.latest_migration)
+			current_apps = MigrationExecutor(connection).loader.project_state(
+				self.latest_migration
+			).apps
+			CurrentCard = current_apps.get_model("cards", "Card")
+			self.assertNotIn("category", [field.name for field in CurrentCard._meta.fields])
+			self.assertNotIn(
+				"accountcategorysettings",
+				current_apps.all_models["cards"],
+			)
+			with connection.cursor() as cursor:
+				card_columns = {
+					column.name
+					for column in connection.introspection.get_table_description(
+						cursor,
+						CurrentCard._meta.db_table,
+					)
+				}
+				table_names = connection.introspection.table_names(cursor)
+			self.assertNotIn("category", card_columns)
+			self.assertNotIn("cards_accountcategorysettings", table_names)
+		finally:
+			MigrationExecutor(connection).migrate(self.latest_migration)

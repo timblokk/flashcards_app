@@ -15,11 +15,10 @@ cards["answer"] = cards["french"]
 cards["de"] =  cards["german"]
 cards["date_moved"] = datetime.datetime.now(datetime.timezone.utc)
 cards["date_created"] = datetime.datetime.now(datetime.timezone.utc)
-cards["category"] = "VHS_B1/B2"
 cards["box"] = 1
 
 
 
 for i in range(0, len(cards["answer"])):
-    Card(answer= cards["answer"][i], date_moved= cards["date_moved"][i], category= cards["category"][i], box= cards["box"][i], date_created=
+    Card(answer= cards["answer"][i], date_moved= cards["date_moved"][i], box= cards["box"][i], date_created=
  cards["date_created"][i], question = cards["de"][i]).save()

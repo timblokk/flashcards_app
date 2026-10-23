@@ -4,13 +4,12 @@ from cards.models import BOXES, Card
 register = template.Library()
 
 @register.inclusion_tag("cards/box_links.html", takes_context=True)
-def boxes_as_links(context, categoryForm):
+def boxes_as_links(context):
     boxes = []
     for box_num in BOXES:
         card_count = Card.objects.filter(
             user=context["request"].user,
             box=box_num,
-            category=categoryForm,
         ).count()
         boxes.append({
             "number": box_num,
@@ -19,11 +18,10 @@ def boxes_as_links(context, categoryForm):
     return {"boxes": boxes}
 
 @register.inclusion_tag("cards/repeat_link.html", takes_context=True)
-def repeat_box_as_link(context, categoryForm):
+def repeat_box_as_link(context):
     repeat_count=0
     for card in Card.objects.filter(
         user=context["request"].user,
-        category=categoryForm,
     ):
         if(card.to_repeat):
             repeat_count = repeat_count +1

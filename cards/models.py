@@ -8,23 +8,6 @@ from django.core.exceptions import ValidationError
 # Create your models here.
 NUM_BOXES = 6
 BOXES = range(1, NUM_BOXES + 1)
-CAT_CHOICES = [
-    ('Arabic', 'Arabic'),
-    ('Test_Card','test cards'),
-    ('livres', 'Livres/Journaux'),
-    ('VHS_B1/B2', 'VHS_B1/B2'),
-    ('F5','Francais 5'),
-    ('F6','Francais 6'),
-    ('F7','Francais 7'),
-]
-
-class AccountCategorySettings(models.Model):
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        related_name="category_settings",
-        on_delete=models.CASCADE,
-    )
-    arabic_only = models.BooleanField(default=True)
 
 
 class Card(models.Model):
@@ -45,7 +28,6 @@ class Card(models.Model):
     )
     date_created = models.DateTimeField(auto_now_add=True)
     date_moved = models.DateTimeField(auto_now_add=True)
-    category = models.CharField(max_length=9, choices= CAT_CHOICES,    default='F6')
 
     class Meta:
         constraints = [

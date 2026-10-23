@@ -3,7 +3,7 @@
     <h2>Import cards</h2>
     <p>Upload a CSV or Excel (.xlsx) file with columns named
        <code>question</code> and <code>answer</code>. Excel files use the first worksheet.
-       Imported cards are added to your Arabic category in box 1.</p>
+       Imported cards are added to box 1.</p>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         {% if form.non_field_errors %}
