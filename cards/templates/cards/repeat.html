@@ -1,21 +1,32 @@
 {% extends "cards/base_cards.html" %}
 {% load humanize %}
 {% block content %}
-    <h2>Repeat Cards</h2>
-    <form method="get" class="flip-control">
-        <label for="flip-flashcards">Flip flashcards</label>
-        <input
-            id="flip-flashcards"
-            name="flip"
-            type="checkbox"
-            value="1"
-            {% if flipped %}checked{% endif %}
-            onchange="this.form.submit()"
-        >
-    </form>
-    <mark>{{ object_list | length }}</mark> Card{{ object_list | pluralize }} left in box.
-    <hr>
+    <section class="page-heading study-heading">
+        <div>
+            <p class="eyebrow">A FEW MINUTES GO A LONG WAY</p>
+            <h1>Time to review</h1>
+            <p class="page-intro">{{ object_list | length }} card{{ object_list | pluralize }} ready for practice.</p>
+        </div>
+        <form method="get" class="flip-control">
+            <label for="flip-flashcards">Flip cards</label>
+            <input
+                id="flip-flashcards"
+                name="flip"
+                type="checkbox"
+                value="1"
+                {% if flipped %}checked{% endif %}
+                onchange="this.form.submit()"
+            >
+        </form>
+    </section>
     {% if check_card %}
         {% include "cards/card.html" with card=check_card %}
+    {% else %}
+        <section class="empty-state">
+            <span class="empty-icon" aria-hidden="true">✦</span>
+            <h2>You’re all caught up</h2>
+            <p>Lovely work. Come back later and keep your streak going.</p>
+            <a class="button button-primary" href="{% url 'card-list' %}">Back to my cards</a>
+        </section>
     {% endif %}
 {% endblock content %}

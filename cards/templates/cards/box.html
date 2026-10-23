@@ -1,10 +1,21 @@
 {% extends "cards/base_cards.html" %}
 {% load humanize %}
 {% block content %}
-    <h2>🗃 {{ box_number | ordinal }} Box</h2>
-    <mark>{{ object_list | length }}</mark> Card{{ object_list | pluralize }} left in box.
-    <hr>
+    <section class="page-heading">
+        <div>
+            <p class="eyebrow">YOUR LEARNING SPACE</p>
+            <h1>{{ box_number | ordinal }} box</h1>
+            <p class="page-intro">{{ object_list | length }} card{{ object_list | pluralize }} in this box.</p>
+        </div>
+        <a class="button button-secondary" href="{% url 'card-list' %}">All cards</a>
+    </section>
     {% for card in object_list %}
         {% include "cards/card.html" %}
+    {% empty %}
+        <section class="empty-state">
+            <span class="empty-icon" aria-hidden="true">✓</span>
+            <h2>This box is clear</h2>
+            <p>Cards will move here as you continue your reviews.</p>
+        </section>
     {% endfor %}
 {% endblock content %}

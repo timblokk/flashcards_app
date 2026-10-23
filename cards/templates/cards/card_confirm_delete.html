@@ -1,11 +1,15 @@
 {% extends "cards/base_cards.html" %}
 {% block content %}
-<form method="post">
-    {% csrf_token %}
-    <h2>Really delete the card? {{ card.question }}</h2>
-        <input type="submit" value="✅ Confirm">
-    </form>
-    <a href="{% url 'card-list' %}">
-        <input type="submit" value="❌ Cancel">
-    </a>
+    <section class="confirm-panel">
+        <p class="eyebrow">REMOVE FROM YOUR DECK</p>
+        <h1>Delete this card?</h1>
+        <p class="form-intro">{{ card.question }}</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-footer">
+                <button class="button button-again" type="submit">Delete card</button>
+                <a class="button button-secondary" href="{% url 'card-list' %}">Keep card</a>
+            </div>
+        </form>
+    </section>
 {% endblock %}

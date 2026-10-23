@@ -1,11 +1,17 @@
 {% extends "cards/base_cards.html" %}
 {% block content %}
-    <h2>Log in</h2>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <input type="hidden" name="next" value="{{ next }}">
-        <button type="submit">Log in</button>
-    </form>
-    <p>New here? <a href="{% url 'signup' %}">Create an account</a>.</p>
+    <div class="auth-wrap">
+        <section class="auth-panel">
+            <p class="eyebrow">WELCOME BACK</p>
+            <h1>Log in</h1>
+            <p class="auth-intro">Pick up right where you left off.</p>
+            <form method="post">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <input type="hidden" name="next" value="{{ next }}">
+                <button type="submit">Log in</button>
+            </form>
+            <p class="auth-switch">New here? <a href="{% url 'signup' %}">Create an account</a>.</p>
+        </section>
+    </div>
 {% endblock %}
