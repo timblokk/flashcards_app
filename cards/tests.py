@@ -6,9 +6,10 @@ from tempfile import TemporaryDirectory
 
 from django.core.management import call_command
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.urls import reverse
@@ -55,26 +56,23 @@ class DictionarySuggestionTests(TestCase):
 
 		self.assertEqual(response.json(), {"results": []})
 
-	def test_create_card_accepts_english_arabic_without_german(self):
+	def test_dictionary_suggestion_fills_question_and_answer(self):
 		self.client.force_login(get_user_model().objects.create_user("card-owner"))
 		response = self.client.post(
 			reverse("card-create"),
 			{
-				"question_de": "",
-				"question_en": "Apple",
+				"question": "Apple",
 				"answer": "التفاحة",
 				"dictionary_entry_id": DictionaryEntry.objects.get(headword="Apple").id,
 				"box": 1,
 				"category": "Arabic",
-				"language": "en",
 			},
 		)
 
 		self.assertRedirects(response, reverse("card-create"))
-		card = Card.objects.get(question_en="Apple")
+		card = Card.objects.get(question="Apple")
 		self.assertEqual(card.answer, "التفاحة")
 		self.assertEqual(card.answer_vocalized, "التُّفَّاحَةُ")
-		self.assertEqual(card.language, "en")
 		self.assertEqual(card.user.username, "card-owner")
 
 
@@ -82,12 +80,7 @@ class AccountDeckTests(TestCase):
 	def create_card(self, **kwargs):
 		return Card.objects.create(
 			answer="legacy-secret-answer",
-			question_en="question",
-			question_es="",
-			question_de="",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="question",
 			**kwargs,
 		)
 
@@ -112,7 +105,7 @@ class AccountDeckTests(TestCase):
 
 		filter_response = self.client.get(
 			reverse("fiter-categories"),
-			{"category": "F6", "language": "de"},
+			{"category": "F6"},
 		)
 		self.assertContains(filter_response, 'value="Arabic"')
 		self.assertNotContains(filter_response, '<option value="F6">')
@@ -122,16 +115,18 @@ class AccountDeckTests(TestCase):
 		create_response = self.client.get(reverse("card-create"))
 		self.assertContains(create_response, 'value="Arabic"')
 		self.assertNotContains(create_response, '<option value="F6">')
+		self.assertContains(create_response, 'name="question"')
+		self.assertContains(create_response, 'name="answer"')
+		self.assertNotContains(create_response, 'name="language"')
+		self.assertNotContains(create_response, 'name="question_en"')
 
 		response = self.client.post(
 			reverse("card-create"),
 			{
-				"question_de": "",
-				"question_en": "Apple",
+				"question": "Apple",
 				"answer": "التفاحة",
 				"box": 1,
 				"category": "F6",
-				"language": "en",
 			},
 		)
 		self.assertEqual(response.status_code, 200)
@@ -140,12 +135,10 @@ class AccountDeckTests(TestCase):
 		response = self.client.post(
 			reverse("card-create"),
 			{
-				"question_de": "",
-				"question_en": "Apple",
+				"question": "Apple",
 				"answer": "التفاحة",
 				"box": 1,
 				"category": "Arabic",
-				"language": "en",
 			},
 		)
 		self.assertRedirects(response, reverse("card-create"))
@@ -176,50 +169,42 @@ class AccountDeckTests(TestCase):
 			get_user_model().objects.filter(username="new-user").exists()
 		)
 
-	def test_card_uniqueness_is_enforced_for_each_language_per_user(self):
+	def test_card_form_prevents_duplicate_question_per_user(self):
 		user = get_user_model().objects.create_user("owner")
 		other_user = get_user_model().objects.create_user("other")
-		question_fields = [
-			"question_de",
-			"question_en",
-			"question_pl",
-			"question_it",
-			"question_pt",
-			"question_es",
-		]
+		Card.objects.create(user=user, question="question", answer="translation")
+		duplicate_form = CardForm(
+			data={
+				"question": "question",
+				"answer": "different translation",
+				"box": 1,
+				"category": "Arabic",
+			},
+			user=user,
+		)
+		self.assertFalse(duplicate_form.is_valid())
+		self.assertIn("already exists", str(duplicate_form.errors))
 
-		for field in question_fields:
-			with self.subTest(language_field=field):
-				question_values = {
-					question_field: f"{field}-{question_field}"
-					for question_field in question_fields
-				}
-				Card.objects.create(
-					user=user,
-					answer="translation",
-					**question_values,
-				)
+		other_user_form = CardForm(
+			data={
+				"question": "question",
+				"answer": "translation",
+				"box": 1,
+				"category": "Arabic",
+			},
+			user=other_user,
+		)
+		self.assertTrue(other_user_form.is_valid())
 
-				duplicate_values = question_values.copy()
-				duplicate_values[field] = question_values[field]
-				duplicate_values.update({
-					question_field: (
-						value if question_field == field else f"other-{value}"
-					)
-					for question_field, value in question_values.items()
-				})
-				with self.assertRaises(IntegrityError), transaction.atomic():
-					Card.objects.create(
-						user=user,
-						answer="translation",
-						**duplicate_values,
-					)
-
-				Card.objects.create(
-					user=other_user,
-					answer="translation",
-					**question_values,
-				)
+	def test_database_prevents_duplicate_question_per_user(self):
+		user = get_user_model().objects.create_user("unique-question-owner")
+		Card.objects.create(user=user, question="question", answer="translation")
+		with self.assertRaises(IntegrityError), transaction.atomic():
+			Card.objects.create(
+				user=user,
+				question="question",
+				answer="different translation",
+			)
 
 	def test_legacy_username_claims_existing_cards_at_signup(self):
 		legacy_card = self.create_card()
@@ -331,16 +316,15 @@ class CardImportTests(TestCase):
 		self.user = get_user_model().objects.create_user("importer")
 		self.client.force_login(self.user)
 
-	def upload(self, filename, content, language="en"):
+	def upload(self, filename, content):
 		return self.client.post(
 			reverse("card-import"),
 			{
 				"file": SimpleUploadedFile(filename, content),
-				"language": language,
 			},
 		)
 
-	def test_csv_upload_creates_owned_arabic_cards_in_selected_language(self):
+	def test_csv_upload_creates_owned_cards_with_any_language_question(self):
 		DictionaryEntry.objects.create(
 			language_pair="en-ar",
 			headword="hello",
@@ -350,79 +334,57 @@ class CardImportTests(TestCase):
 		response = self.upload(
 			"cards.csv",
 			b"question,answer\nhello,\xd9\x85\xd8\xb1\xd8\xad\xd8\xa8\xd8\xa7\nbye,goodbye\n",
-			language="en",
 		)
 
 		self.assertRedirects(response, reverse("card-list"))
 		self.assertEqual(list(response.wsgi_request._messages)[0].message, "Imported 2 cards.")
 		cards = list(Card.objects.filter(user=self.user).order_by("id"))
 		self.assertEqual(len(cards), 2)
-		self.assertEqual(cards[0].question_en, "hello")
+		self.assertEqual(cards[0].question, "hello")
 		self.assertEqual(cards[0].answer, "مرحبا")
 		self.assertEqual(cards[0].answer_vocalized, "مَرْحَبًا")
 		self.assertEqual(cards[0].category, "Arabic")
-		self.assertEqual(cards[0].language, "en")
 		self.assertEqual(cards[0].box, 1)
-		self.assertEqual(cards[0].question_de, "")
 		self.assertEqual(cards[1].answer_vocalized, "")
 		other_user = get_user_model().objects.create_user("other-deck")
 		self.assertEqual(Card.objects.filter(user=other_user).count(), 0)
 
-	def test_xlsx_upload_creates_cards_in_selected_language(self):
+	def test_xlsx_upload_creates_cards_with_unrestricted_question_text(self):
 		from openpyxl import Workbook
 
 		workbook = Workbook()
 		worksheet = workbook.active
 		worksheet.append(["question", "answer"])
-		worksheet.append(["Haus", "house"])
+		worksheet.append(["maison", "house"])
 		content = BytesIO()
 		workbook.save(content)
 
-		response = self.upload("cards.xlsx", content.getvalue(), language="de")
+		response = self.upload("cards.xlsx", content.getvalue())
 
 		self.assertRedirects(response, reverse("card-list"))
 		card = Card.objects.get(user=self.user)
-		self.assertEqual(card.question_de, "Haus")
+		self.assertEqual(card.question, "maison")
 		self.assertEqual(card.answer, "house")
-		self.assertEqual(card.language, "de")
 
-	def test_exported_xlsx_round_trips_mixed_languages_to_another_user(self):
+	def test_exported_xlsx_round_trips_question_and_answer(self):
 		Card.objects.create(
 			user=self.user,
 			answer="مرحبا",
-			question_en="hello",
-			question_es="",
-			question_de="",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="hello",
 			category="Arabic",
-			language="en",
 		)
 		Card.objects.create(
 			user=self.user,
 			answer="Haus",
-			question_en="",
-			question_es="",
-			question_de="house",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="maison",
 			category="Arabic",
-			language="de",
 		)
 		other_user = get_user_model().objects.create_user("export-recipient")
 		Card.objects.create(
 			user=other_user,
 			answer="private",
-			question_en="private question",
-			question_es="",
-			question_de="",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="private question",
 			category="Arabic",
-			language="en",
 		)
 
 		export_response = self.client.get(reverse("card-export"))
@@ -449,13 +411,13 @@ class CardImportTests(TestCase):
 		self.assertEqual(
 			exported_rows,
 			[
-				("question", "answer", "language"),
-				("hello", "مرحبا", "en"),
-				("house", "Haus", "de"),
+				("question", "answer"),
+				("hello", "مرحبا"),
+				("maison", "Haus"),
 			],
 		)
 		self.assertNotIn(
-			("private question", "private", "en"),
+			("private question", "private"),
 			exported_rows,
 		)
 
@@ -479,11 +441,11 @@ class CardImportTests(TestCase):
 		imported_cards = Card.objects.filter(user=other_user).order_by("id")
 		self.assertEqual(imported_cards.count(), 3)
 		self.assertEqual(
-			list(imported_cards.values_list("question_en", "question_de", "language")),
+			list(imported_cards.values_list("question", "answer")),
 			[
-				("private question", "", "en"),
-				("hello", "", "en"),
-				("", "house", "de"),
+				("private question", "private"),
+				("hello", "مرحبا"),
+				("maison", "Haus"),
 			],
 		)
 
@@ -491,15 +453,9 @@ class CardImportTests(TestCase):
 		Card.objects.create(
 			user=self.user,
 			answer="مرحبا",
-			question_en="hello",
-			question_es="",
-			question_de="",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="hello",
 			box=1,
 			category="Arabic",
-			language="en",
 		)
 
 		for url in (reverse("card-create"), reverse("card-import")):
@@ -512,7 +468,7 @@ class CardImportTests(TestCase):
 	def test_duplicate_rows_are_skipped_and_reported_after_import(self):
 		response = self.upload(
 			"cards.csv",
-			b"question,answer\nhello,world\nhello,world\nbye,goodbye\n",
+			b"question,answer\nhello,world\nhello,another answer\nbye,goodbye\n",
 		)
 
 		self.assertRedirects(response, reverse("card-list"))
@@ -529,8 +485,16 @@ class CardImportTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(
 			response,
-			"question, answer, and optionally language",
+			"question and answer",
 		)
+		self.assertEqual(Card.objects.filter(user=self.user).count(), 0)
+
+		response = self.upload(
+			"legacy-language.csv",
+			b"question,answer,language\nhello,world,en\n",
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "question and answer")
 		self.assertEqual(Card.objects.filter(user=self.user).count(), 0)
 
 		response = self.upload(
@@ -545,32 +509,20 @@ class CardImportTests(TestCase):
 		Card.objects.create(
 			user=self.user,
 			answer="world",
-			question_en="hello",
-			question_es="",
-			question_de="",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="hello",
 			category="Arabic",
-			language="en",
 		)
 		other_user = get_user_model().objects.create_user("other-importer")
 		Card.objects.create(
 			user=other_user,
 			answer="world",
-			question_en="other question",
-			question_es="",
-			question_de="",
-			question_it="",
-			question_pt="",
-			question_pl="",
+			question="other question",
 			category="Arabic",
-			language="en",
 		)
 
 		response = self.upload(
 			"cards.csv",
-			b"question,answer\nhello,world\nnew question,new answer\n",
+			b"question,answer\nhello,different translation\nnew question,new answer\n",
 		)
 
 		self.assertRedirects(response, reverse("card-list"))
@@ -591,14 +543,37 @@ class CardImportTests(TestCase):
 
 
 class ArabicVocalizationTests(TestCase):
+	def test_repeat_card_shows_vocalized_question_before_revealing_answer(self):
+		user = get_user_model().objects.create_user("arabic-question-owner")
+		self.client.force_login(user)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Sick",
+			translation="مريض",
+			vocalized_translation="مَرِيضٌ",
+		)
+		card = Card.objects.create(
+			user=user,
+			question="مريض",
+			answer="Sick",
+			category="Arabic",
+		)
+		card.date_moved = timezone.now() - timedelta(days=2)
+		card.save(update_fields=["date_moved"])
+
+		response = self.client.get(reverse("todo-list"))
+
+		self.assertContains(response, "مريض")
+		self.assertContains(response, "مَرِيضٌ")
+		self.assertContains(response, "Reveal Answer")
+		self.assertEqual(card.answer_vocalized, "")
+
 	def test_non_arabic_answers_are_not_vocalized(self):
 		form = CardForm(data={
-			"question_de": "Haus",
-			"question_en": "house",
+			"question": "Haus",
 			"answer": "maison",
 			"box": 1,
 			"category": "F6",
-			"language": "de",
 		})
 
 		self.assertTrue(form.is_valid())
@@ -614,20 +589,17 @@ class ArabicVocalizationTests(TestCase):
 			vocalized_translation="التُّفَّاحَةُ",
 		)
 		form = CardForm(data={
-			"question_de": "",
-			"question_en": "apple",
+			"question": "apple",
 			"answer": "التفاحة",
 			"dictionary_entry_id": entry.id,
 			"box": 1,
 			"category": "F6",
-			"language": "en",
 		})
 		self.assertTrue(form.is_valid())
 		card = form.save()
 
 		rendered = render_to_string("cards/card.html", {
 			"card": card,
-			"language": "en",
 			"check_card": False,
 		})
 
@@ -657,3 +629,109 @@ class ArabicVocalizationTests(TestCase):
 		entry = DictionaryEntry.objects.get(language_pair="en-ar", headword="Apple")
 		self.assertEqual(entry.translation, "التفاحة")
 		self.assertEqual(entry.vocalized_translation, "التُّفَّاحَةُ")
+
+
+class ConsolidateQuestionMigrationTests(TransactionTestCase):
+	def test_migration_handles_collisions_and_restores_questions_on_rollback(self):
+		before_migration = [("cards", "0012_remove_card_uniq_card_user_answer_de_and_more")]
+		after_migration = [("cards", "0013_consolidate_question_field")]
+
+		try:
+			MigrationExecutor(connection).migrate(before_migration)
+			old_apps = MigrationExecutor(connection).loader.project_state(
+				before_migration
+			).apps
+			User = old_apps.get_model("auth", "User")
+			LegacyCard = old_apps.get_model("cards", "Card")
+			user = User.objects.create(username="question-migration-owner")
+			LegacyCard.objects.create(
+				user_id=user.pk,
+				answer="translation",
+				question_de="same question",
+				question_en="",
+				question_pl="",
+				question_it="",
+				question_pt="",
+				question_es="",
+				language="de",
+			)
+			LegacyCard.objects.create(
+				user_id=user.pk,
+				answer="translation",
+				question_de="same question (2)",
+				question_en="",
+				question_pl="",
+				question_it="",
+				question_pt="",
+				question_es="",
+				language="de",
+			)
+			LegacyCard.objects.create(
+				user_id=user.pk,
+				answer="other translation",
+				question_de="",
+				question_en="same question",
+				question_pl="",
+				question_it="",
+				question_pt="",
+				question_es="",
+				language="en",
+			)
+
+			MigrationExecutor(connection).migrate(after_migration)
+			current_apps = MigrationExecutor(connection).loader.project_state(
+				after_migration
+			).apps
+			CurrentCard = current_apps.get_model("cards", "Card")
+			self.assertEqual(
+				list(
+					CurrentCard.objects.filter(user_id=user.pk)
+					.order_by("pk")
+					.values_list(
+						"question",
+						flat=True,
+					)
+				),
+				["same question", "same question (2)", "same question (3)"],
+			)
+			with self.assertRaises(IntegrityError), transaction.atomic():
+				CurrentCard.objects.create(
+					user_id=user.pk,
+					question="same question",
+					answer="a different answer",
+				)
+
+			MigrationExecutor(connection).migrate(before_migration)
+			restored_apps = MigrationExecutor(connection).loader.project_state(
+				before_migration
+			).apps
+			RestoredCard = restored_apps.get_model("cards", "Card")
+			restored_rows = list(
+				RestoredCard.objects.filter(user_id=user.pk).values_list(
+					"question_de",
+					"question_en",
+					"question_pl",
+					"question_it",
+					"question_pt",
+					"question_es",
+					"language",
+				)
+			)
+			self.assertEqual(len(restored_rows), 3)
+			self.assertTrue(
+				all(any(row[:6]) for row in restored_rows)
+			)
+			self.assertEqual(
+				{row[0] for row in restored_rows},
+				{
+					"same question",
+					"same question (2)",
+					"same question (3)",
+				},
+			)
+			self.assertEqual(
+				{row[6] for row in restored_rows},
+				{"de"},
+			)
+		finally:
+			MigrationExecutor(connection).migrate(after_migration)

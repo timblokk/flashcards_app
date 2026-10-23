@@ -2,9 +2,8 @@
     const form = document.querySelector("#card-form[data-dictionary-url]");
     if (!form) return;
 
-    const headwordInput = form.querySelector("#id_question_en");
+    const headwordInput = form.querySelector("#id_question");
     const translationInput = form.querySelector("#id_answer");
-    const languageInput = form.querySelector("#id_language");
     const dictionaryEntryInput = form.querySelector("#id_dictionary_entry_id");
     if (!headwordInput || !translationInput) return;
 
@@ -32,10 +31,6 @@
         headwordInput.value = entry.headword;
         translationInput.value = entry.translation;
         if (dictionaryEntryInput) dictionaryEntryInput.value = entry.id;
-        if (languageInput) {
-            languageInput.value = "en";
-            languageInput.dispatchEvent(new Event("change", { bubbles: true }));
-        }
         translationInput.dispatchEvent(new Event("input", { bubbles: true }));
         closeSuggestions();
         headwordInput.focus();

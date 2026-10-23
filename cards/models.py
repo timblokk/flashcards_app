@@ -18,16 +18,6 @@ CAT_CHOICES = [
     ('F7','Francais 7'),
 ]
 
-LANG_CHOICES = [
-    ('de', 'Allemand'),
-    ('en', 'Anglais'),
-    ('pl', 'polognais'),
-    ('it', 'italien'),
-    ('pt', 'portogaise'),
-    ('es', 'espagnol'),
-]
-
-
 class AccountCategorySettings(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -47,12 +37,7 @@ class Card(models.Model):
     )
     answer =  models.CharField(max_length = 300)
     answer_vocalized = models.TextField(blank=True)
-    question_en = models.CharField(max_length = 100)
-    question_es = models.CharField(max_length = 100)
-    question_de = models.CharField(max_length = 100)
-    question_it = models.CharField(max_length = 100)
-    question_pt = models.CharField(max_length = 100)
-    question_pl = models.CharField(max_length = 100)
+    question = models.CharField(max_length=100)
 
     box = models.IntegerField(
         choices=zip(BOXES, BOXES),
@@ -61,7 +46,15 @@ class Card(models.Model):
     date_created = models.DateTimeField(auto_now_add=True)
     date_moved = models.DateTimeField(auto_now_add=True)
     category = models.CharField(max_length=9, choices= CAT_CHOICES,    default='F6')
-    language = models.CharField(max_length=15, choices = LANG_CHOICES, default ="de" )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "question"],
+                name="uniq_card_user_question",
+                condition=~models.Q(question=""),
+            ),
+        ]
 
     def __str__(self):
         return self.question
@@ -88,41 +81,6 @@ class Card(models.Model):
         }
         to_repeat = (now - self.date_moved- datetime.timedelta(days=min_age[self.box])).total_seconds() > 0
         return to_repeat
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "answer", "question_de"],
-                name="uniq_card_user_answer_de",
-                condition=~models.Q(question_de=""),
-            ),
-            models.UniqueConstraint(
-                fields=["user", "answer", "question_en"],
-                name="uniq_card_user_answer_en",
-                condition=~models.Q(question_en=""),
-            ),
-            models.UniqueConstraint(
-                fields=["user", "answer", "question_pl"],
-                name="uniq_card_user_answer_pl",
-                condition=~models.Q(question_pl=""),
-            ),
-            models.UniqueConstraint(
-                fields=["user", "answer", "question_it"],
-                name="uniq_card_user_answer_it",
-                condition=~models.Q(question_it=""),
-            ),
-            models.UniqueConstraint(
-                fields=["user", "answer", "question_pt"],
-                name="uniq_card_user_answer_pt",
-                condition=~models.Q(question_pt=""),
-            ),
-            models.UniqueConstraint(
-                fields=["user", "answer", "question_es"],
-                name="uniq_card_user_answer_es",
-                condition=~models.Q(question_es=""),
-            ),
-        ]
-
 
 class DictionaryEntry(models.Model):
     language_pair = models.CharField(max_length=16, default="en-ar")

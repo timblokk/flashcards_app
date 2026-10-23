@@ -41,16 +41,8 @@ tree["answer"] = ["".join((genders[i], " ", tree["fr"][i], " (", word_type[i], "
 
 
 tree["de"] = ["".join((tree["de"][i], " (", word_type[i], ")")) for i in range(0,len(splitted3))]
-tree["pt"] = ["".join((tree["pt"][i], " (", word_type[i], ")")) for i in range(0,len(splitted3))]
-tree["it"] = ["".join((tree["it"][i], " (", word_type[i], ")")) for i in range(0,len(splitted3))]
-tree["pl"] = ["".join((tree["pl"][i], " (", word_type[i], ")")) for i in range(0,len(splitted3))]
-tree["en"] = ["".join((tree["en"][i], " (", word_type[i], ")")) for i in range(0,len(splitted3))]
-tree["es"] = ["".join((tree["es"][i], " (", word_type[i], ")")) for i in range(0,len(splitted3))]
 
 tree[ ["date_moved", "box", "category", "answer", "question", "de", "pt", "it", "pl", "en", "es"]]
 
 for i in range(0, len(splitted3)):
-    Card(answer= tree["answer"][i], date_moved= tree["date_moved"][i], category= tree["category"][i], box= tree["box"][i], date_created= tree["date_created"][i], question_en= tree["en"][i] ,question_de = tree["de"][i],  question_pt= tree["pt"][i], question_it= tree["it"][i], question_pl= tree["pl"][i], question_es= tree["es"][i]).save()
-
-
-
+    Card(answer= tree["answer"][i], date_moved= tree["date_moved"][i], category= tree["category"][i], box= tree["box"][i], date_created= tree["date_created"][i], question= tree["question"][i]).save()

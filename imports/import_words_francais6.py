@@ -11,8 +11,7 @@ from cards.models import Card
 
 cards = pd.read_csv("/home/timblokker/Documents/flashcards_app/imports/12_Sep_22_vocabulary.csv")
 cards["answer"] = cards["FR"]
-cards["de"] =  cards["DE"]
-cards["en"] =  cards["EN"]
+cards["question"] = cards["DE"]
 
 cards["date_moved"] = datetime.datetime.now(datetime.timezone.utc)
 cards["date_created"] = datetime.datetime.now(datetime.timezone.utc)
@@ -24,7 +23,5 @@ cards["box"] = 1
 #cards.to_csv("/home/tim/flashcards_app/imports/12_Sep_22_vocabulary.csv")
 
 for i in range(0, len(cards["answer"])):
-    Card(answer= cards["answer"][i], date_moved= cards["date_moved"][i], category= cards["category"][i], box= cards["box"][i], date_created= cards["date_created"][i], question_en= cards["en"][i] ,question_de = cards["de"][i]).save()
-
-
+    Card(answer= cards["answer"][i], date_moved= cards["date_moved"][i], category= cards["category"][i], box= cards["box"][i], date_created= cards["date_created"][i], question= cards["question"][i]).save()
 
