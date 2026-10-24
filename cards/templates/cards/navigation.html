@@ -1,5 +1,5 @@
 {% load cards_tags %}
-<nav class="main-nav" aria-label="Main navigation">
+<nav class="main-nav desktop-nav" aria-label="Main navigation">
     {% if user.is_authenticated %}
         <a class="nav-link" href="{% url 'card-list' %}">My cards</a>
         {% repeat_box_as_link %}

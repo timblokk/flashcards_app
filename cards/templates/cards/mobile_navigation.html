@@ -1,0 +1,48 @@
+{% load cards_tags %}
+<nav class="mobile-nav" aria-label="Mobile navigation">
+    {% if user.is_authenticated %}
+        <a class="mobile-nav-item" href="{% url 'card-list' %}">
+            <span class="mobile-nav-icon" aria-hidden="true">⌂</span>
+            <span>My cards</span>
+        </a>
+        {% repeat_box_as_link %}
+        <details class="mobile-nav-menu mobile-box-menu" name="mobile-menus">
+            <summary class="mobile-nav-item">
+                <span class="mobile-nav-icon" aria-hidden="true">▦</span>
+                <span>Boxes</span>
+            </summary>
+            <div class="mobile-nav-popover mobile-box-popover">
+                <h2 class="mobile-popover-title">Your boxes</h2>
+                <nav aria-label="Card boxes">
+                    {% boxes_as_links %}
+                </nav>
+            </div>
+        </details>
+        <details class="mobile-nav-menu mobile-more-menu" name="mobile-menus">
+            <summary class="mobile-nav-item">
+                <span class="mobile-nav-icon account-initials" aria-hidden="true">
+                    {{ user.username|slice:":2"|upper }}
+                </span>
+                <span>Menu</span>
+            </summary>
+            <div class="mobile-nav-popover mobile-account-popover">
+                <h2 class="mobile-popover-title">Account</h2>
+                <a class="mobile-menu-link" href="{% url 'card-import' %}">Import cards</a>
+                <a class="mobile-menu-link" href="{% url 'card-export' %}">Export cards</a>
+                <form method="post" action="{% url 'logout' %}" class="mobile-logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="mobile-menu-link">Log out</button>
+                </form>
+            </div>
+        </details>
+    {% else %}
+        <a class="mobile-nav-item" href="{% url 'login' %}">
+            <span class="mobile-nav-icon" aria-hidden="true">↪</span>
+            <span>Log in</span>
+        </a>
+        <a class="mobile-nav-item" href="{% url 'signup' %}">
+            <span class="mobile-nav-icon" aria-hidden="true">＋</span>
+            <span>Create account</span>
+        </a>
+    {% endif %}
+</nav>

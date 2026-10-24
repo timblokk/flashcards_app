@@ -3,6 +3,7 @@ from html.parser import HTMLParser
 from io import BytesIO
 from datetime import timedelta
 from io import StringIO
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.core.management import call_command
@@ -11,6 +12,8 @@ from django.db import IntegrityError, connection, transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
+from django.test import RequestFactory
+from django.template import Context, Template
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.urls import NoReverseMatch, reverse
@@ -399,7 +402,7 @@ class AccountDeckTests(TestCase):
 		self.assertNotContains(box_response, "legacy-secret-answer")
 		self.assertContains(box_response, "<mark>0</mark>")
 		self.assertNotContains(repeat_response, "legacy-secret-answer")
-		self.assertContains(repeat_response, "<mark>0</mark>")
+		self.assertEqual(repeat_response.context["card_count"], 0)
 
 		self.client.force_login(owner)
 		self.assertContains(self.client.get(reverse("box", args=[1])), "legacy-secret-answer")
@@ -536,6 +539,118 @@ class AccountDeckTests(TestCase):
 					response,
 					f'aria-labelledby="answer-{check_card.pk}"',
 				)
+
+	def test_learning_views_use_focused_layout_with_exit_control(self):
+		user = get_user_model().objects.create_user("focused-learning-owner")
+		study_card = self.create_card(user=user, box=1)
+		study_card.date_moved = timezone.now() - timedelta(days=2)
+		study_card.save(update_fields=["date_moved"])
+		Card.objects.create(
+			user=user,
+			answer="practice answer",
+			question="practice question",
+			box=1,
+		)
+		self.client.force_login(user)
+
+		responses = [
+			self.client.get(reverse("todo-list")),
+			self.client.get(
+				reverse("practice-all-cards"),
+				{"start": "1"},
+				follow=True,
+			),
+		]
+
+		for response in responses:
+			with self.subTest(path=response.request["PATH_INFO"]):
+				self.assertTrue(response.context["learning_mode"])
+				self.assertContains(response, 'class="learning-mode"')
+				self.assertContains(response, 'aria-label="Exit learning mode"')
+				self.assertContains(
+					response,
+					f'href="{reverse("card-list")}" aria-label="Exit learning mode"',
+				)
+				self.assertNotContains(response, 'class="site-header"')
+				self.assertNotContains(response, 'aria-label="Main navigation"')
+				self.assertNotContains(response, 'class="site-footer"')
+
+	def test_mobile_navigation_uses_compact_tabs_and_menu_popovers(self):
+		user = get_user_model().objects.create_user("mobile-navigation-owner")
+		self.create_card(user=user, box=1)
+		self.client.force_login(user)
+
+		response = self.client.get(reverse("card-list"))
+
+		self.assertContains(response, 'class="main-nav desktop-nav"')
+		self.assertContains(response, 'class="mobile-nav"')
+		self.assertContains(response, 'aria-label="Card boxes"')
+		self.assertContains(response, 'class="mobile-nav-menu mobile-more-menu"')
+		self.assertContains(response, "Your boxes")
+		self.assertContains(response, "Account")
+		self.assertContains(response, reverse("card-list"))
+		self.assertContains(response, reverse("todo-list"))
+		self.assertContains(response, reverse("box", args=[1]))
+		self.assertContains(response, reverse("card-import"))
+		self.assertContains(response, reverse("card-export"))
+		self.assertContains(response, "Log out")
+		self.assertContains(response, 'class="mobile-nav-icon account-initials"')
+		self.assertContains(response, "MO")
+		self.assertNotContains(response, 'aria-hidden="true">•••</span>')
+
+	def test_navigation_counts_are_loaded_once_for_desktop_and_mobile(self):
+		user = get_user_model().objects.create_user("navigation-count-owner")
+		due_card = self.create_card(user=user, box=1)
+		due_card.date_moved = timezone.now() - timedelta(days=2)
+		due_card.save(update_fields=["date_moved"])
+		Card.objects.create(
+			user=user,
+			answer="recent answer",
+			question="recent card",
+			box=2,
+		)
+		request = RequestFactory().get("/")
+		request.user = user
+		template = Template(
+			"{% load cards_tags %}"
+			"{% boxes_as_links %}{% repeat_box_as_link %}"
+			"{% boxes_as_links %}{% repeat_box_as_link %}"
+		)
+
+		with self.assertNumQueries(1):
+			rendered = template.render(Context({"request": request}))
+
+		self.assertEqual(rendered.count(f'href="{reverse("box", args=[1])}"'), 2)
+		self.assertEqual(rendered.count(f'href="{reverse("todo-list")}"'), 2)
+		self.assertEqual(rendered.count("<mark>1</mark>"), 6)
+
+	def test_mobile_tab_bar_clearance_covers_tablet_breakpoint(self):
+		stylesheet = (
+			Path(__file__).parent / "static" / "cards" / "css" / "app.css"
+		).read_text(encoding="utf-8")
+
+		self.assertIn(
+			"@media (max-width: 960px) {\n"
+			"    .page-shell:not(.learning-shell) {\n"
+			"        padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));",
+			stylesheet,
+		)
+		self.assertIn(
+			".mobile-nav-popover {\n"
+			"        position: fixed;\n"
+			"        z-index: 30;\n"
+			"        top: calc(64px + env(safe-area-inset-top));",
+			stylesheet,
+		)
+		self.assertIn(
+			"        bottom: calc(4.5rem + env(safe-area-inset-bottom));",
+			stylesheet,
+		)
+		self.assertIn(
+			"        top: calc(56px + env(safe-area-inset-top));",
+			stylesheet,
+		)
+		self.assertIn("        min-height: 4.25rem;", stylesheet)
 
 	def test_home_page_shows_all_user_cards_without_filter_view(self):
 		user = get_user_model().objects.create_user("home-page-owner")
