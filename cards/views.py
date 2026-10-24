@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import JsonResponse
 from django.urls import reverse_lazy
+from django.views.csrf import csrf_failure as django_csrf_failure
 from django.views.generic import (
     ListView,
     CreateView,
@@ -25,6 +26,10 @@ from .forms import (
     CardImportForm,
 )
 from .forms import CardCheckForm
+
+
+def csrf_failure(request, reason=""):
+    return django_csrf_failure(request, reason)
 
 
 def with_card_vocalizations(cards):
@@ -279,3 +284,82 @@ class CardRepeatView(CardListView):
             card.move(form.cleaned_data["solved"])
             card.to_repeat
         return redirect(request.META.get("HTTP_REFERER"))
+
+
+class CardPracticeView(LoginRequiredMixin, ListView):
+    template_name = "cards/repeat.html"
+    form_class = CardCheckForm
+
+    def get_session_key(self):
+        box_num = self.kwargs.get("box_num", "all")
+        return f"card_practice_{self.request.user.pk}_{box_num}"
+
+    def get_cards(self):
+        cards = Card.objects.filter(user=self.request.user)
+        if "box_num" in self.kwargs:
+            cards = cards.filter(box=self.kwargs["box_num"])
+        return cards
+
+    def get_card_ids(self):
+        key = self.get_session_key()
+        card_ids = self.request.session.get(key)
+        if card_ids is None:
+            card_ids = list(self.get_cards().values_list("pk", flat=True))
+            random.shuffle(card_ids)
+            self.request.session[key] = card_ids
+        else:
+            available_ids = set(
+                self.get_cards().values_list("pk", flat=True)
+            )
+            card_ids = [card_id for card_id in card_ids if card_id in available_ids]
+            self.request.session[key] = card_ids
+        return card_ids
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("start") == "1":
+            key = self.get_session_key()
+            card_ids = list(self.get_cards().values_list("pk", flat=True))
+            random.shuffle(card_ids)
+            request.session[key] = card_ids
+            return redirect(request.path)
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        card_ids = self.get_card_ids()
+        if not card_ids:
+            return []
+        cards = with_card_vocalizations(
+            self.get_cards().filter(pk=card_ids[0])
+        )
+        return list(cards)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        object_list = context["object_list"]
+        context["check_card"] = object_list[0] if object_list else None
+        context["practice_only"] = True
+        context["remaining_count"] = len(self.get_card_ids())
+        context["total_cards"] = self.get_cards().count()
+        context["flipped"] = self.request.GET.get("flip") == "1"
+        if "box_num" in self.kwargs:
+            context["box_number"] = self.kwargs["box_num"]
+        else:
+            context["practice_title"] = "Practice all cards"
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request.POST)
+        if form.is_valid():
+            card = get_object_or_404(
+                self.get_cards(),
+                pk=form.cleaned_data["card_id"],
+            )
+            key = self.get_session_key()
+            card_ids = self.get_card_ids()
+            if not card_ids or card.pk != card_ids[0]:
+                return redirect(request.path)
+            card_ids.remove(card.pk)
+            if not form.cleaned_data["solved"]:
+                card_ids.append(card.pk)
+            request.session[key] = card_ids
+        return redirect(request.path)

@@ -225,6 +225,12 @@ summary:focus-visible {
     margin-bottom: 2.25rem;
 }
 
+.page-heading-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
 .page-heading h1,
 .auth-panel h1 {
     margin: 0;
@@ -937,6 +943,14 @@ button.dictionary-suggestion:focus-visible {
 
     .page-heading > .button {
         width: 100%;
+    }
+
+    .page-heading-actions {
+        width: 100%;
+    }
+
+    .page-heading-actions .button {
+        flex: 1 1 100%;
     }
 
     .study-heading {

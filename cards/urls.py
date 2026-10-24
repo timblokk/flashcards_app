@@ -57,4 +57,14 @@ urlpatterns = [
         views.CardRepeatView.as_view(),
         name="todo-list"
     ), 
+    path(
+        "repeat/all/",
+        views.CardPracticeView.as_view(),
+        name="practice-all-cards",
+    ),
+    path(
+        "repeat/box/<int:box_num>/",
+        views.CardPracticeView.as_view(),
+        name="practice-box",
+    ),
 ]
