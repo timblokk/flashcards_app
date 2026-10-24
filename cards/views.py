@@ -267,6 +267,7 @@ class CardRepeatView(CardListView):
         object_list = context["object_list"]
         context["card_count"] = len(object_list)
         context["flipped"] = self.request.GET.get("flip") == "1"
+        context["learning_mode"] = True
 
         if object_list:
             context["check_card"] = random.choice(object_list)
@@ -341,6 +342,7 @@ class CardPracticeView(LoginRequiredMixin, ListView):
         context["remaining_count"] = len(self.get_card_ids())
         context["total_cards"] = self.get_cards().count()
         context["flipped"] = self.request.GET.get("flip") == "1"
+        context["learning_mode"] = True
         if "box_num" in self.kwargs:
             context["box_number"] = self.kwargs["box_num"]
         else:

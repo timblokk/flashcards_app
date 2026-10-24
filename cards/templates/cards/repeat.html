@@ -1,35 +1,39 @@
 {% extends "cards/base_cards.html" %}
 {% load humanize %}
 {% block content %}
-    <section class="page-heading study-heading">
-        <div>
-            <p class="eyebrow">A FEW MINUTES GO A LONG WAY</p>
+    <section class="learning-toolbar" aria-label="Learning controls">
+        <div class="learning-title">
             <h1>
                 {% if practice_only %}
                     {% if box_number %}Practice the {{ box_number | ordinal }} box{% else %}{{ practice_title }}{% endif %}
                 {% else %}
-                    Time to review
+                    Study / repeat
                 {% endif %}
             </h1>
-            <p class="page-intro">
+            <p>
                 {% if practice_only %}
-                    {{ remaining_count }} card{{ remaining_count | pluralize }} left in this practice.
+                    {{ remaining_count }} card{{ remaining_count | pluralize }} left
                 {% else %}
-                    {{ object_list | length }} card{{ object_list | pluralize }} ready for practice.
+                    {{ card_count }} card{{ card_count | pluralize }} ready
                 {% endif %}
             </p>
         </div>
-        <form method="get" class="flip-control">
-            <label for="flip-flashcards">Flip cards</label>
-            <input
-                id="flip-flashcards"
-                name="flip"
-                type="checkbox"
-                value="1"
-                {% if flipped %}checked{% endif %}
-                onchange="this.form.submit()"
-            >
-        </form>
+        <div class="learning-tools">
+            <form method="get" class="flip-control">
+                <label for="flip-flashcards">Flip cards</label>
+                <input
+                    id="flip-flashcards"
+                    name="flip"
+                    type="checkbox"
+                    value="1"
+                    {% if flipped %}checked{% endif %}
+                    onchange="this.form.submit()"
+                >
+            </form>
+            <a class="learning-exit" href="{% url 'card-list' %}" aria-label="Exit learning mode" title="Exit learning mode">
+                <span aria-hidden="true">×</span>
+            </a>
+        </div>
     </section>
     {% if check_card %}
         {% include "cards/card.html" with card=check_card %}
