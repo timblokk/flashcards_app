@@ -12,6 +12,8 @@ from django.db import IntegrityError, connection, transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
+from django.test import RequestFactory
+from django.template import Context, Template
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.urls import NoReverseMatch, reverse
@@ -548,6 +550,32 @@ class AccountDeckTests(TestCase):
 		self.assertContains(response, 'class="mobile-nav-icon account-initials"')
 		self.assertContains(response, "MO")
 		self.assertNotContains(response, 'aria-hidden="true">•••</span>')
+
+	def test_navigation_counts_are_loaded_once_for_desktop_and_mobile(self):
+		user = get_user_model().objects.create_user("navigation-count-owner")
+		due_card = self.create_card(user=user, box=1)
+		due_card.date_moved = timezone.now() - timedelta(days=2)
+		due_card.save(update_fields=["date_moved"])
+		Card.objects.create(
+			user=user,
+			answer="recent answer",
+			question="recent card",
+			box=2,
+		)
+		request = RequestFactory().get("/")
+		request.user = user
+		template = Template(
+			"{% load cards_tags %}"
+			"{% boxes_as_links %}{% repeat_box_as_link %}"
+			"{% boxes_as_links %}{% repeat_box_as_link %}"
+		)
+
+		with self.assertNumQueries(1):
+			rendered = template.render(Context({"request": request}))
+
+		self.assertEqual(rendered.count(f'href="{reverse("box", args=[1])}"'), 2)
+		self.assertEqual(rendered.count(f'href="{reverse("todo-list")}"'), 2)
+		self.assertEqual(rendered.count("<mark>1</mark>"), 6)
 
 	def test_mobile_tab_bar_clearance_covers_tablet_breakpoint(self):
 		stylesheet = (
