@@ -167,6 +167,27 @@ class AccountDeckTests(TestCase):
 
 		self.assertRedirects(response, reverse("card-list"))
 
+	def test_login_accepts_current_csrf_cookie_token(self):
+		client = self.client_class(enforce_csrf_checks=True)
+		user = get_user_model().objects.create_user(
+			"csrf-cookie-login-user",
+			password="Correct-Horse-92!",
+		)
+		login_page = client.get(reverse("login"))
+		csrf_token = client.cookies["csrftoken"].value
+
+		self.assertContains(login_page, "cards/js/login_csrf.js")
+		response = client.post(
+			reverse("login"),
+			{
+				"username": user.username,
+				"password": "Correct-Horse-92!",
+				"csrfmiddlewaretoken": csrf_token,
+			},
+		)
+
+		self.assertRedirects(response, reverse("card-list"))
+
 	def test_invalid_csrf_on_login_refreshes_form_for_logged_out_user(self):
 		client = self.client_class(enforce_csrf_checks=True)
 

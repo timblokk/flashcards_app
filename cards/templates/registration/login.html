@@ -1,4 +1,5 @@
 {% extends "cards/base_cards.html" %}
+{% load static %}
 {% block content %}
     <div class="auth-wrap">
         <section class="auth-panel">
@@ -14,4 +15,5 @@
             <p class="auth-switch">New here? <a href="{% url 'signup' %}">Create an account</a>.</p>
         </section>
     </div>
+    <script src="{% static 'cards/js/login_csrf.js' %}" defer></script>
 {% endblock %}
