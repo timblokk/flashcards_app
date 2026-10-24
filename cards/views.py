@@ -6,7 +6,9 @@ from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import JsonResponse
-from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
+from django.views.csrf import csrf_failure as default_csrf_failure
 from django.views.generic import (
     ListView,
     CreateView,
@@ -25,6 +27,20 @@ from .forms import (
     CardImportForm,
 )
 from .forms import CardCheckForm
+
+
+def csrf_failure(request, reason=""):
+    if request.path_info != reverse("login"):
+        return default_csrf_failure(request, reason=reason)
+
+    if request.user.is_authenticated:
+        return redirect("card-list")
+
+    messages.error(
+        request,
+        "Your login form could not be verified. Please try again.",
+    )
+    return redirect("login")
 
 
 def with_card_vocalizations(cards):
