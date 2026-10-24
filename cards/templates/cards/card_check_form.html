@@ -5,6 +5,8 @@
     {% if solved %}
         <button class="button button-known" type="submit">I knew it</button>
     {% else %}
-        <button class="button button-again" type="submit">Practice again</button>
+        <button class="button button-again" type="submit">
+            {% if practice_only %}Repeat this card{% else %}Practice again{% endif %}
+        </button>
     {% endif %}
 </form>

@@ -4,8 +4,20 @@
     <section class="page-heading study-heading">
         <div>
             <p class="eyebrow">A FEW MINUTES GO A LONG WAY</p>
-            <h1>Time to review</h1>
-            <p class="page-intro">{{ object_list | length }} card{{ object_list | pluralize }} ready for practice.</p>
+            <h1>
+                {% if practice_only %}
+                    {% if box_number %}Practice the {{ box_number | ordinal }} box{% else %}{{ practice_title }}{% endif %}
+                {% else %}
+                    Time to review
+                {% endif %}
+            </h1>
+            <p class="page-intro">
+                {% if practice_only %}
+                    {{ remaining_count }} card{{ remaining_count | pluralize }} left in this practice.
+                {% else %}
+                    {{ object_list | length }} card{{ object_list | pluralize }} ready for practice.
+                {% endif %}
+            </p>
         </div>
         <form method="get" class="flip-control">
             <label for="flip-flashcards">Flip cards</label>
@@ -24,9 +36,15 @@
     {% else %}
         <section class="empty-state">
             <span class="empty-icon" aria-hidden="true">✦</span>
-            <h2>You’re all caught up</h2>
-            <p>Lovely work. Come back later and keep your streak going.</p>
-            <a class="button button-primary" href="{% url 'card-list' %}">Back to my cards</a>
+            {% if practice_only %}
+                <h2>{% if total_cards %}Practice complete{% else %}No cards to practice{% endif %}</h2>
+                <p>{% if total_cards %}You’ve practiced every card in this set. Your box and review schedule are unchanged.{% else %}Add cards to this set to start practicing.{% endif %}</p>
+                <a class="button button-primary" href="{% url 'card-list' %}">Back to my cards</a>
+            {% else %}
+                <h2>You’re all caught up</h2>
+                <p>Lovely work. Come back later and keep your streak going.</p>
+                <a class="button button-primary" href="{% url 'card-list' %}">Back to my cards</a>
+            {% endif %}
         </section>
     {% endif %}
 {% endblock content %}

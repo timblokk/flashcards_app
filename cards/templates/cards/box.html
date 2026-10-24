@@ -2,12 +2,15 @@
 {% load humanize %}
 {% block content %}
     <section class="page-heading">
-        <div>
+        <div class="page-heading-actions">
             <p class="eyebrow">YOUR LEARNING SPACE</p>
             <h1>{{ box_number | ordinal }} box</h1>
             <p class="page-intro">{{ object_list | length }} card{{ object_list | pluralize }} in this box.</p>
         </div>
-        <a class="button button-secondary" href="{% url 'card-list' %}">All cards</a>
+        <div>
+            <a class="button button-secondary" href="{% url 'practice-box' box_num=box_number %}?start=1">Practice this box</a>
+            <a class="button button-secondary" href="{% url 'card-list' %}">All cards</a>
+        </div>
     </section>
     {% for card in object_list %}
         {% include "cards/card.html" %}

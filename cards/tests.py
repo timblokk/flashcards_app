@@ -405,6 +405,138 @@ class AccountDeckTests(TestCase):
 		self.assertContains(self.client.get(reverse("box", args=[1])), "legacy-secret-answer")
 		self.assertContains(self.client.get(reverse("todo-list")), "legacy-secret-answer")
 
+	def test_practice_all_cards_does_not_change_box_or_review_date(self):
+		user = get_user_model().objects.create_user("practice-all-owner")
+		first_card = self.create_card(user=user, box=1)
+		second_card = Card.objects.create(
+			user=user,
+			answer="legacy-secret-answer",
+			question="second question",
+			box=4,
+		)
+		first_date_moved = first_card.date_moved
+		second_date_moved = second_card.date_moved
+		self.client.force_login(user)
+
+		response = self.client.get(
+			reverse("practice-all-cards"),
+			{"start": "1"},
+			follow=True,
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.context["remaining_count"], 2)
+		first_practice_card = response.context["check_card"]
+		self.assertIn(first_practice_card.pk, {first_card.pk, second_card.pk})
+
+		self.client.post(
+			reverse("practice-all-cards"),
+			{"card_id": first_practice_card.pk, "solved": "on"},
+		)
+		first_practice_card.refresh_from_db()
+		self.assertEqual(first_practice_card.box, (
+			1 if first_practice_card.pk == first_card.pk else 4
+		))
+		self.assertEqual(first_practice_card.date_moved, (
+			first_date_moved if first_practice_card.pk == first_card.pk
+			else second_date_moved
+		))
+
+		response = self.client.get(reverse("practice-all-cards"))
+		self.assertEqual(response.context["remaining_count"], 1)
+		second_practice_card = response.context["check_card"]
+		self.assertNotEqual(second_practice_card.pk, first_practice_card.pk)
+		self.client.post(
+			reverse("practice-all-cards"),
+			{"card_id": second_practice_card.pk, "solved": ""},
+		)
+
+		response = self.client.get(reverse("practice-all-cards"))
+		self.assertEqual(response.context["remaining_count"], 1)
+		self.assertEqual(response.context["check_card"].pk, second_practice_card.pk)
+		self.client.post(
+			reverse("practice-all-cards"),
+			{"card_id": second_practice_card.pk, "solved": "on"},
+		)
+
+		response = self.client.get(reverse("practice-all-cards"))
+		self.assertIsNone(response.context["check_card"])
+		self.assertContains(response, "Practice complete")
+		first_card.refresh_from_db()
+		second_card.refresh_from_db()
+		self.assertEqual((first_card.box, first_card.date_moved), (1, first_date_moved))
+		self.assertEqual((second_card.box, second_card.date_moved), (4, second_date_moved))
+
+	def test_box_practice_only_includes_the_users_cards_from_that_box(self):
+		user = get_user_model().objects.create_user("practice-box-owner")
+		other_user = get_user_model().objects.create_user("practice-box-other")
+		box_card = self.create_card(user=user, box=3)
+		Card.objects.create(
+			user=user,
+			answer="legacy-secret-answer",
+			question="other box",
+			box=2,
+		)
+		other_users_card = self.create_card(user=other_user, box=3)
+		self.client.force_login(user)
+
+		response = self.client.get(
+			reverse("practice-box", args=[3]),
+			{"start": "1"},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.context["remaining_count"], 1)
+		self.assertEqual(response.context["check_card"].pk, box_card.pk)
+		self.assertContains(response, "Practice the 3rd box")
+		self.assertContains(
+			self.client.get(reverse("box", args=[3])),
+			f'{reverse("practice-box", args=[3])}?start=1',
+		)
+		self.assertEqual(
+			self.client.post(
+				reverse("practice-box", args=[3]),
+				{"card_id": other_users_card.pk, "solved": "on"},
+			).status_code,
+			404,
+		)
+
+	def test_practice_flip_control_flips_all_and_box_cards(self):
+		user = get_user_model().objects.create_user("practice-flip-owner")
+		all_card = Card.objects.create(
+			user=user,
+			answer="all card answer",
+			question="all card question",
+			box=1,
+		)
+		box_card = Card.objects.create(
+			user=user,
+			question="box card question",
+			answer="box card answer",
+			box=2,
+		)
+		self.client.force_login(user)
+
+		for url, card in (
+			(reverse("practice-all-cards"), all_card),
+			(reverse("practice-box", args=[2]), box_card),
+		):
+			with self.subTest(url=url):
+				response = self.client.get(url, {"flip": "1", "start": "1"})
+
+				self.assertEqual(response.status_code, 302)
+				response = self.client.get(url, {"flip": "1"})
+
+				self.assertTrue(response.context["flipped"])
+				check_card = response.context["check_card"]
+				self.assertIsNotNone(check_card)
+				if "box" in url:
+					self.assertEqual(check_card.pk, card.pk)
+				self.assertContains(
+					response,
+					f'aria-labelledby="answer-{check_card.pk}"',
+				)
+
 	def test_home_page_shows_all_user_cards_without_filter_view(self):
 		user = get_user_model().objects.create_user("home-page-owner")
 		self.create_card(user=user)
@@ -414,6 +546,10 @@ class AccountDeckTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, "legacy-secret-answer")
+		self.assertContains(
+			response,
+			f'{reverse("practice-all-cards")}?start=1',
+		)
 		self.assertNotContains(response, "Filter Cards")
 		self.assertNotContains(response, 'name="category"')
 		with self.assertRaises(NoReverseMatch):
@@ -693,6 +829,48 @@ class ArabicVocalizationTests(TestCase):
 				arabic_display_texts(response, f"answer-{card.id}"),
 				[f"{answer} {answer_vocalized}"],
 			)
+
+	def test_all_cards_practice_shows_dictionary_vocalization(self):
+		user = get_user_model().objects.create_user("all-cards-vocalization-owner")
+		self.client.force_login(user)
+		question = "لفظة تقرأ طردا وعكسا"
+		vocalized_question = "لَفْظَةٌ تَقْرَأُ طَرْدَا وَعَكْسَا"
+		answer = "ألفاظ تقرأ طردا وعكسا"
+		vocalized_answer = "أَلْفَاظُ تَقْرَأُ طَرْدَا وَعَكْسَا"
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Palindrome",
+			translation=question,
+			vocalized_translation=vocalized_question,
+		)
+		DictionaryEntry.objects.create(
+			language_pair="en-ar",
+			headword="Palindromes",
+			translation=answer,
+			vocalized_translation=vocalized_answer,
+		)
+		card = Card.objects.create(
+			user=user,
+			question=question,
+			answer=answer,
+		)
+
+		response = self.client.get(
+			reverse("practice-all-cards"),
+			{"start": "1"},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.context["check_card"].pk, card.pk)
+		self.assertEqual(
+			arabic_display_texts(response, f"question-{card.pk}"),
+			[f"{question} {vocalized_question}"],
+		)
+		self.assertEqual(
+			arabic_display_texts(response, f"answer-{card.pk}"),
+			[f"{answer} {vocalized_answer}"],
+		)
 
 	def test_manually_entered_vocalization_is_saved_with_arabic_answer(self):
 		answer = "هي تحب ان تذهب"
